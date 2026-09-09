@@ -1,21 +1,41 @@
 /* ==========================================================================
    printer.js — the machine itself.
 
-   Owns the stage DOM: the LCD, the status LEDs, the sheet that grows out of
-   the slot, the print head that tracks the freshly printed edge, the toner
-   cartridge, and the motor noise. Hand it a job from render.js and it prints.
+   Printing is modelled the way an inkjet actually works: the paper steps
+   forward by one band, the carriage sweeps across laying ink into that band,
+   the paper steps again. Ink is copied from a fully rendered off-screen page
+   into the visible sheet only as the head passes over it, so what you watch
+   is the page being written, not a page being revealed.
    ========================================================================== */
 
 (function (global) {
   'use strict';
 
-  var SPEED  = { draft: 1500, normal: 800,  high: 420 };  // page-pixels per second
-  var SWEEPS = { draft: 7,    normal: 5,    high: 3.4 };  // head sweeps per second
+  /* Per quality: band height in page pixels, and how long a sweep and a paper
+     step take. Higher quality lays finer bands and takes longer, as it should. */
+  var BAND = {
+    draft:  { h: 96, sweep: 48, feed: 26 },
+    normal: { h: 56, sweep: 64, feed: 30 },
+    high:   { h: 34, sweep: 88, feed: 34 }
+  };
+
+  var STACK_MAX = 24;         // sheets kept in the tray's DOM; older ones are buried anyway
   var reduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  /* ── motor / feed noise ───────────────────────────────────────────────── */
+  /* A finished page becomes a PNG blob: one image instead of a 3.7 MB canvas
+     per sheet, and the same URL serves the tray, the viewer and the download. */
+  function pageURL(canvas) {
+    return new Promise(function (resolve) {
+      if (!canvas.toBlob) { resolve(canvas.toDataURL('image/png')); return; }
+      canvas.toBlob(function (blob) {
+        resolve(blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png'));
+      }, 'image/png');
+    });
+  }
+
+  /* ── motor, rollers, carriage ─────────────────────────────────────────── */
 
   function Sound() {
     this.enabled = false;
@@ -28,14 +48,14 @@
     if (!AC) return false;
     this.ctx = new AC();
 
-    /* One second of noise, looped — the basis for every printer sound. */
+    /* A second of brown-ish noise, looped — the basis for every sound here. */
     var len = this.ctx.sampleRate;
     var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     var data = buf.getChannelData(0);
     var last = 0;
     for (var i = 0; i < len; i++) {
       var white = Math.random() * 2 - 1;
-      last = (last + 0.04 * white) / 1.04;          // brown-ish, less hissy
+      last = (last + 0.04 * white) / 1.04;
       data[i] = last * 3.2;
     }
     this.noise = buf;
@@ -65,32 +85,35 @@
     this.resume();
     var t = this.ctx.currentTime;
     this.motorGain.gain.cancelScheduledValues(t);
-    this.motorGain.gain.setTargetAtTime(on ? 0.055 : 0, t, 0.05);
+    this.motorGain.gain.setTargetAtTime(on ? 0.055 : 0, t, 0.02);
   };
 
-  /* Track the carriage: filter frequency follows the head across the page. */
+  /* The carriage: filter frequency follows the head across the page. */
   Sound.prototype.sweep = function (pos) {
     if (!this.enabled || !this.ctx) return;
     this.filter.frequency.setTargetAtTime(520 + pos * 900, this.ctx.currentTime, 0.03);
   };
 
-  /* A roller clunk when a sheet is grabbed or released. */
-  Sound.prototype.clunk = function (pitch) {
+  /* Rollers: a low clunk for a sheet, a short tick for one paper step. */
+  Sound.prototype.knock = function (pitch, level, decay) {
     if (!this.enabled || !this._init()) return;
     this.resume();
     var t = this.ctx.currentTime;
     var g = this.ctx.createGain();
     var f = this.ctx.createBiquadFilter();
     f.type = 'lowpass';
-    f.frequency.value = pitch || 260;
+    f.frequency.value = pitch;
     var s = this.ctx.createBufferSource();
     s.buffer = this.noise;
     s.connect(f).connect(g).connect(this.ctx.destination);
-    g.gain.setValueAtTime(0.16, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    g.gain.setValueAtTime(level, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
     s.start(t);
-    s.stop(t + 0.25);
+    s.stop(t + decay + 0.02);
   };
+
+  Sound.prototype.clunk = function (pitch) { this.knock(pitch || 260, 0.16, 0.22); };
+  Sound.prototype.step  = function ()      { this.knock(1500, 0.035, 0.05); };
 
   /* ── the printer ──────────────────────────────────────────────────────── */
 
@@ -100,8 +123,11 @@
     this.toner = 100;
     this.busy = false;
     this.cancelled = false;
+    this.pages = [];         // {url, n, el}
     this._waiting = null;
-    this.onpage = null;      // (canvas, {index, total, copy}) => void
+    this._abortFeed = null;
+    this.onpage = null;      // (page) => void — a sheet landed in the tray
+    this.ontray = null;      // () => void — tray contents changed
     this.onstate = null;     // (state) => void
     this._paintToner();
   }
@@ -146,7 +172,7 @@
     if (this._waiting) { var go = this._waiting; this._waiting = null; go(); }
   };
 
-  /* ── one sheet ────────────────────────────────────────────────────────── */
+  /* ── composing one sheet ──────────────────────────────────────────────── */
 
   Printer.prototype._compose = function (job, index, opts) {
     var g = job.geom;
@@ -163,26 +189,41 @@
     return { canvas: canvas, coverage: coverage };
   };
 
-  Printer.prototype._feed = function (canvas, job, opts, label) {
+  /* ── running a sheet through: step, sweep, step, sweep ────────────────── */
+
+  Printer.prototype._run = function (full, job, opts, label) {
     var self = this;
     var g = job.geom;
     var sheet = this.dom.sheet;
     var head = this.dom.head;
 
-    /* Mount the page behind the slot at on-screen scale. */
-    var prev = sheet.querySelector('canvas');
-    if (prev) prev.remove();
-    sheet.insertBefore(canvas, sheet.firstChild);
+    /* The visible sheet starts blank. Ink arrives only where the head has been. */
+    var paper = document.createElement('canvas');
+    paper.width = g.w;
+    paper.height = g.h;
+    var ink = paper.getContext('2d');
+    ink.fillStyle = '#ffffff';
+    ink.fillRect(0, 0, g.w, g.h);
+
+    var old = sheet.querySelector('canvas');
+    if (old) old.remove();
+    sheet.insertBefore(paper, sheet.firstChild);
 
     var sheetW = sheet.getBoundingClientRect().width || 270;
     var scale = sheetW / g.w;
-    var fullH = g.h * scale;
     sheet.style.height = '0px';
     head.classList.add('is-on');
 
-    var speed = SPEED[opts.quality] || SPEED.normal;
-    var sweeps = SWEEPS[opts.quality] || SWEEPS.normal;
+    var band = BAND[opts.quality] || BAND.normal;
+    var bands = Math.ceil(g.h / band.h);
     var travel = Math.max(0, sheetW + 26 - 30);
+
+    /* Lay ink between two carriage positions on the band starting at `top`. */
+    function lay(x0, x1, top, height) {
+      var a = Math.max(0, Math.min(x0, x1) - 1);
+      var b = Math.min(g.w, Math.max(x0, x1) + 1);
+      if (b > a) ink.drawImage(full, a, top, b - a, height, a, top, b - a, height);
+    }
 
     this.sound.clunk(240);
 
@@ -190,81 +231,94 @@
       function finish(ok) {
         self._abortFeed = null;
         head.classList.remove('is-on');
+        self.sound.motor(false);
         resolve(ok);
       }
       self._abortFeed = function () { finish(false); };
 
-      if (reduceMotion) {                      // no animation: place the sheet, move on
-        sheet.style.height = fullH + 'px';
+      if (reduceMotion) {                    // no animation: print the sheet outright
+        ink.drawImage(full, 0, 0);
+        sheet.style.height = (g.h * scale) + 'px';
         self.progress(1);
-        setTimeout(function () { finish(true); }, 120);
+        setTimeout(function () { finish(true); }, 140);
         return;
       }
 
+      var i = 0;                             // which band
+      var phase = 'step';                    // 'step' (paper advances) | 'sweep' (ink)
+      var t = 0;                             // ms into this phase
+      var dir = 1;                           // carriage direction, alternating
+      var lastX = 0;
       var last = performance.now();
-      var revealed = 0;
-      var clock = 0;
 
       (function frame(now) {
-        if (self.cancelled || !self._abortFeed) {
-          finish(false);
-          return;
-        }
+        if (self.cancelled || !self._abortFeed) { finish(false); return; }
+
         /* Clamped delta rather than elapsed wall time, so a tab that was in
            the background comes back to a paused sheet, not a finished one. */
-        var dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+        var dt = Math.min(100, Math.max(0, now - last));
         last = now;
-        clock += dt;
-        revealed = Math.min(g.h, revealed + dt * speed);
+        t += dt;
 
-        var y = revealed * scale;
-        sheet.style.height = y.toFixed(1) + 'px';
+        var top = i * band.h;
+        var bottom = Math.min(g.h, top + band.h);
+        var height = bottom - top;
+        var fed;
 
-        var pos = 0.5 - 0.5 * Math.cos(clock * sweeps * Math.PI * 2);
-        head.style.transform = 'translate(-50%, ' + (y - 7).toFixed(1) + 'px)';
-        head.firstElementChild.style.transform = 'translateX(' + (pos * travel).toFixed(1) + 'px)';
-        self.sound.sweep(pos);
+        if (phase === 'step') {
+          var p = Math.min(1, t / band.feed);
+          fed = top + height * p;            // the band rolls out past the print line
+          if (p >= 1) {
+            phase = 'sweep';
+            t = 0;
+            lastX = dir > 0 ? 0 : g.w;
+            self.sound.motor(true);
+          }
+        } else {
+          var q = Math.min(1, t / band.sweep);
+          fed = bottom;
+          var x = dir > 0 ? q * g.w : (1 - q) * g.w;
+          lay(lastX, x, top, height);
+          lastX = x;
+          self.sound.sweep(x / g.w);
+          if (q >= 1) {
+            lay(0, g.w, top, height);        // no rounding gaps at the edges
+            self.sound.motor(false);
+            self.sound.step();
+            i++;
+            dir = -dir;
+            phase = 'step';
+            t = 0;
+          }
+        }
 
-        var done = revealed / g.h;
+        sheet.style.height = (fed * scale).toFixed(1) + 'px';
+
+        /* The carriage rides the band it is printing. */
+        var headY = Math.max(0, (fed - height / 2) * scale) - 5;
+        var carriage = phase === 'sweep' ? lastX / g.w : (dir > 0 ? 0 : 1);
+        head.style.transform = 'translate(-50%, ' + headY.toFixed(1) + 'px)';
+        head.firstElementChild.style.transform = 'translateX(' + (carriage * travel).toFixed(1) + 'px)';
+
+        var done = fed / g.h;
         self.progress(done);
         self.lcd('PRINTING', label + ' · ' + Math.round(done * 100) + '%');
 
-        if (revealed >= g.h) {
-          finish(true);
-        } else {
-          requestAnimationFrame(frame);
-        }
+        if (i >= bands) finish(true);
+        else requestAnimationFrame(frame);
       })(last);
     });
   };
 
-  /* Drop the finished sheet into the output tray. */
-  Printer.prototype._eject = function () {
-    var sheet = this.dom.sheet;
-    var self = this;
+  /* Pull the sheet out of the mechanism and drop it on the pile. */
+  Printer.prototype._toTray = async function (canvas) {
+    var url = await pageURL(canvas);
+    this._clearSheet();
     this.sound.clunk(150);
-
-    if (reduceMotion || typeof sheet.animate !== 'function') {
-      sheet.style.height = '0px';
-      var still = sheet.querySelector('canvas');
-      if (still) still.remove();
-      return Promise.resolve();
-    }
-
-    var anim = sheet.animate([
-      { transform: 'translateX(-50%) translateY(0) rotate(0deg)', opacity: 1 },
-      { transform: 'translateX(-50%) translateY(60px) rotate(1.6deg)', opacity: 0 }
-    ], { duration: 380, easing: 'cubic-bezier(.4,0,.85,.4)' });
-
-    return anim.finished.catch(function () {}).then(function () {
-      sheet.style.height = '0px';
-      var c = sheet.querySelector('canvas');
-      if (c) c.remove();
-      return sleep(90);
-    });
+    return this._stack(url);
   };
 
-  Printer.prototype._retract = function () {
+  Printer.prototype._clearSheet = function () {
     var sheet = this.dom.sheet;
     sheet.style.height = '0px';
     var c = sheet.querySelector('canvas');
@@ -272,74 +326,134 @@
     this.dom.head.classList.remove('is-on');
   };
 
+  /* A sheet settling into the tray: it never lands square, so neither do these. */
+  Printer.prototype._stack = function (url) {
+    var n = this.pages.length + 1;
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'sheetout';
+    el.setAttribute('aria-label', 'Printed page ' + n + ' — open it');
+
+    var img = new Image();
+    img.src = url;
+    img.alt = '';
+    el.appendChild(img);
+
+    var dx = (Math.random() * 9 - 4.5).toFixed(1);
+    var dy = (7 + Math.random() * 6).toFixed(1);
+    var turn = (Math.random() * 3 - 1.5).toFixed(2);
+    var rest = 'translate(calc(-50% + ' + dx + 'px), ' + dy + 'px) rotate(' + turn + 'deg)';
+    el.style.transform = rest;
+    el.style.zIndex = String(n);
+
+    this.dom.stack.appendChild(el);
+    while (this.dom.stack.children.length > STACK_MAX) {
+      this.dom.stack.removeChild(this.dom.stack.firstChild);
+    }
+
+    if (!reduceMotion && el.animate) {
+      el.animate(
+        [{ transform: 'translate(-50%, -5px) rotate(0deg)' }, { transform: rest }],
+        { duration: 340, easing: 'cubic-bezier(.22,1.2,.4,1)' }
+      );
+    }
+
+    var page = { url: url, n: n, el: el };
+    this.pages.push(page);
+    if (this.ontray) this.ontray();
+    return page;
+  };
+
+  Printer.prototype.emptyTray = function () {
+    this.pages.forEach(function (p) {
+      if (p.url.slice(0, 5) === 'blob:') URL.revokeObjectURL(p.url);
+    });
+    this.pages = [];
+    this.dom.stack.textContent = '';
+    if (this.ontray) this.ontray();
+  };
+
   /* ── the job ──────────────────────────────────────────────────────────── */
 
+  /* Copies, collation and reverse order all just decide the order sheets come
+     out, so flatten them into one queue before anything spins up. */
+  function buildQueue(job, opts) {
+    var order = job.pages.map(function (_, i) { return i; });
+    if (opts.reverse) order.reverse();
+
+    var queue = [];
+    if (opts.collate === false) {
+      order.forEach(function (i) {
+        for (var c = 0; c < opts.copies; c++) queue.push({ index: i, copy: c });
+      });
+    } else {
+      for (var c = 0; c < opts.copies; c++) {
+        order.forEach(function (i) { queue.push({ index: i, copy: c }); });
+      }
+    }
+    return queue;
+  }
+
   Printer.prototype.print = async function (job, opts) {
-    if (this.busy) return;
+    if (this.busy || !job.pages.length) return 0;
     this.busy = true;
     this.cancelled = false;
 
-    var total = job.pages.length * opts.copies;
+    var queue = buildQueue(job, opts);
+    var total = queue.length;
     var printed = 0;
     this.dom.printer.classList.add('is-busy');
     this.dom.ledData.classList.add('is-on');
     if (this.onstate) this.onstate('printing');
-    this.say('Printing ' + total + ' page' + (total === 1 ? '' : 's') + '…');
+    this.say('Printing ' + total + ' sheet' + (total === 1 ? '' : 's') + '…');
     this.sound.resume();
 
-    for (var copy = 0; copy < opts.copies && !this.cancelled; copy++) {
-      for (var i = 0; i < job.pages.length && !this.cancelled; i++) {
+    for (var q = 0; q < queue.length && !this.cancelled; q++) {
 
-        /* Out of toner? Stop and wait for a new cartridge. */
-        if (this.toner <= 0) {
-          this.sound.motor(false);
-          this.lcd('REPLACE CARTRIDGE', 'job paused — toner empty', true);
-          this.say('Out of toner. Replace the cartridge to finish the job.');
-          if (this.onstate) this.onstate('blocked');
-          var self = this;
-          await new Promise(function (go) { self._waiting = go; });
-          if (this.cancelled) break;
-          this.lcd('PRINTING', 'resuming');
-          if (this.onstate) this.onstate('printing');
-        }
-
-        var label = 'page ' + (i + 1) + '/' + job.pages.length +
-                    (opts.copies > 1 ? ' · copy ' + (copy + 1) : '');
-
-        this.lcd('PRINTING', label + ' · 0%');
-        var made = this._compose(job, i, opts);
-
-        this.sound.motor(true);
-        var finished = await this._feed(made.canvas, job, opts, label);
+      /* Out of toner? Stop and wait for a new cartridge. */
+      if (this.toner <= 0) {
         this.sound.motor(false);
-
-        if (!finished) break;
-
-        this.toner = Math.max(0, this.toner - Math.max(0.6, made.coverage * 22));
-        this._paintToner();
-
-        var out = made.canvas;
-        await this._eject();
-
-        printed++;
-        if (this.onpage) this.onpage(out, { index: i, total: job.pages.length, copy: copy, n: printed });
-        if (printed < total && !this.cancelled) await sleep(160);
+        this.lcd('REPLACE CARTRIDGE', 'job paused — toner empty', true);
+        this.say('Out of toner. Replace the cartridge to finish the job.');
+        if (this.onstate) this.onstate('blocked');
+        var self = this;
+        await new Promise(function (go) { self._waiting = go; });
+        if (this.cancelled) break;
+        this.lcd('PRINTING', 'resuming');
+        if (this.onstate) this.onstate('printing');
       }
+
+      var item = queue[q];
+      var label = 'sheet ' + (q + 1) + '/' + total +
+                  (opts.copies > 1 ? ' · copy ' + (item.copy + 1) : '');
+
+      this.lcd('PRINTING', label + ' · 0%');
+      var made = this._compose(job, item.index, opts);
+      var finished = await this._run(made.canvas, job, opts, label);
+      if (!finished) break;
+
+      this.toner = Math.max(0, this.toner - Math.max(0.6, made.coverage * 22));
+      this._paintToner();
+
+      var page = await this._toTray(made.canvas);
+      printed++;
+      if (this.onpage) this.onpage(page);
+      if (printed < total && !this.cancelled) await sleep(150);
     }
 
     this.sound.motor(false);
-    this._retract();
+    this._clearSheet();
     this.dom.printer.classList.remove('is-busy');
     this.dom.ledData.classList.remove('is-on');
     this.busy = false;
     this.progress(0);
 
     if (this.cancelled) {
-      this.lcd('JOB CANCELLED', printed + ' of ' + total + ' pages printed');
-      this.say('Job cancelled after ' + printed + ' page' + (printed === 1 ? '' : 's') + '.');
+      this.lcd('JOB CANCELLED', printed + ' of ' + total + ' sheets printed');
+      this.say('Job cancelled after ' + printed + ' sheet' + (printed === 1 ? '' : 's') + '.');
     } else {
-      this.lcd('READY', printed + ' page' + (printed === 1 ? '' : 's') + ' printed');
-      this.say(printed + ' page' + (printed === 1 ? '' : 's') + ' in the output tray.');
+      this.lcd('READY', printed + ' sheet' + (printed === 1 ? '' : 's') + ' printed');
+      this.say(printed + ' sheet' + (printed === 1 ? '' : 's') + ' in the output tray.');
     }
     if (this.onstate) this.onstate('idle');
     return printed;

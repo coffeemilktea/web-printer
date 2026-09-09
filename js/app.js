@@ -6,6 +6,7 @@
   'use strict';
 
   var R = global.WP.render;
+  var S = global.WP.save;
   var $ = function (id) { return document.getElementById(id); };
 
   var dom = {
@@ -13,35 +14,48 @@
     docinfo: $('docinfo'), docName: $('doc-name'), docKind: $('doc-kind'),
     docSize: $('doc-size'), docPages: $('doc-pages'), docNote: $('doc-note'),
     btnClear: $('btn-clear'), btnSample: $('btn-sample'),
-    paper: $('paper'), orient: $('orient'), colormode: $('colormode'),
-    quality: $('quality'), copies: $('copies'), sound: $('sound'),
+    paper: $('paper'), orient: $('orient'), scale: $('scale'), margin: $('margin'),
+    nup: $('nup'), range: $('range'), colormode: $('colormode'), quality: $('quality'),
+    copies: $('copies'), collate: $('collate'), reverse: $('reverse'), sound: $('sound'),
     btnPrint: $('btn-print'), btnCancel: $('btn-cancel'), btnToner: $('btn-toner'),
-    printer: $('printer'), head: $('head'), sheet: $('sheet'), out: $('out'), status: $('status'),
+    printer: $('printer'), head: $('head'), sheet: $('sheet'), out: $('out'),
+    stack: $('stack'), stage: document.querySelector('.stage'), status: $('status'),
     lcd: document.querySelector('.lcd'), lcd1: $('lcd-1'), lcd2: $('lcd-2'), lcdFill: $('lcd-fill'),
     ledData: $('led-data'), ledError: $('led-error'),
     tonerFill: $('toner-fill'), tonerPct: $('toner-pct'), tonerBar: document.querySelector('.toner__bar'),
-    trayStack: $('tray-stack'), trayEmpty: $('tray-empty'), trayCount: $('tray-count'), btnEmpty: $('btn-empty'),
-    viewer: $('viewer'), viewerBody: $('viewer-body'), viewerTitle: $('viewer-title'),
-    viewerDownload: $('viewer-download'), viewerClose: $('viewer-close')
+    trayCount: $('tray-count'), btnEmpty: $('btn-empty'), btnPdf: $('btn-pdf'),
+    viewer: $('viewer'), viewerImg: $('viewer-img'), viewerTitle: $('viewer-title'),
+    viewerPrev: $('viewer-prev'), viewerNext: $('viewer-next'),
+    viewerFormat: $('viewer-format'), viewerDownload: $('viewer-download'),
+    viewerClose: $('viewer-close')
   };
 
   var printer = new global.WP.Printer(dom);
   var currentFile = null;
   var job = null;
   var spoolToken = 0;
-  var printed = 0;
 
   /* ── settings ─────────────────────────────────────────────────────────── */
 
   function options() {
+    var scale = dom.scale.value === 'fit' ? 'fit' : parseFloat(dom.scale.value);
     return {
       paper: dom.paper.value,
       landscape: dom.orient.value === 'landscape',
+      scale: scale,
+      margin: dom.margin.value,
+      nup: parseInt(dom.nup.value, 10) || 1,
+      range: dom.range.value,
       colormode: dom.colormode.value,
       quality: dom.quality.value,
-      copies: Math.max(1, Math.min(5, parseInt(dom.copies.value, 10) || 1))
+      copies: Math.max(1, Math.min(5, parseInt(dom.copies.value, 10) || 1)),
+      collate: dom.collate.checked,
+      reverse: dom.reverse.checked
     };
   }
+
+  /* Options that change how the document is laid out, and so need a respool. */
+  var LAYOUT = ['paper', 'orient', 'scale', 'margin', 'nup', 'range'];
 
   /* ── loading a document ───────────────────────────────────────────────── */
 
@@ -70,14 +84,16 @@
       if (token !== spoolToken) return;                 // a newer file won the race
       job = built;
 
-      fitLandingArea(job.geom);
+      fitTray(job.geom);
       dom.docKind.textContent = job.kind;
-      dom.docPages.textContent = job.pages.length + (job.pages.length === 1 ? ' page' : ' pages');
+      dom.docPages.textContent = describeSheets(job);
       dom.docNote.hidden = !job.note;
       dom.docNote.textContent = job.note || '';
-      dom.btnPrint.disabled = printer.busy;
+      dom.btnPrint.disabled = printer.busy || !job.pages.length;
       printer.lcd('READY', job.name + ' · ' + job.pages.length + 'p · ' + job.geom.label);
-      printer.say('Ready to print ' + job.pages.length + ' page' + (job.pages.length === 1 ? '' : 's') + '.');
+      printer.say(job.pages.length
+        ? 'Ready to print ' + job.pages.length + ' sheet' + (job.pages.length === 1 ? '' : 's') + '.'
+        : 'Nothing to print.');
     } catch (err) {
       if (token !== spoolToken) return;
       job = null;
@@ -91,11 +107,23 @@
     }
   }
 
-  /* Reserve exactly one sheet's worth of room below the slot. */
-  function fitLandingArea(geom) {
+  /* The tray extends to fit whatever paper is loaded, like a real one. */
+  function fitTray(geom) {
     var w = dom.sheet.getBoundingClientRect().width;
     if (!w) return;
-    dom.out.style.minHeight = Math.ceil(w * geom.h / geom.w) + 'px';
+    dom.stage.style.setProperty('--sheet-h', Math.ceil(w * geom.h / geom.w) + 'px');
+  }
+
+  /* "3 sheets" on its own, or "3 sheets · 6 of 8 pages" once the range or
+     n-up settings mean sheets and pages are no longer the same thing. */
+  function describeSheets(job) {
+    var sheets = job.pages.length;
+    if (!sheets) return 'nothing to print';
+    var text = sheets + (sheets === 1 ? ' sheet' : ' sheets');
+    if (job.selected !== job.logical || job.selected !== sheets) {
+      text += ' · ' + job.selected + ' of ' + job.logical + ' pages';
+    }
+    return text;
   }
 
   function clearDoc() {
@@ -136,7 +164,7 @@
     load(e.dataTransfer.files[0]);
   });
 
-  global.addEventListener('resize', function () { if (job) fitLandingArea(job.geom); });
+  global.addEventListener('resize', function () { if (job) fitTray(job.geom); });
 
   document.addEventListener('paste', function (e) {
     if (!e.clipboardData) return;
@@ -154,8 +182,9 @@
 
   dom.btnClear.addEventListener('click', clearDoc);
 
-  /* Re-paginate when the sheet geometry changes. */
-  [dom.paper, dom.orient].forEach(function (el) {
+  /* Re-paginate whenever a layout setting moves. */
+  LAYOUT.forEach(function (key) {
+    var el = dom[key === 'orient' ? 'orient' : key];
     el.addEventListener('change', function () { if (currentFile) spool(); });
   });
 
@@ -180,10 +209,10 @@
     '                     the width of the sheet, with a running',
     '                     header and a page number in the footer.',
     '',
-    '  Images ........... scaled to fit the printable area, centred,',
-    '                     and captioned with their pixel dimensions.',
-    '                     Small images are drawn without smoothing,',
-    '                     so pixel art stays sharp.',
+    '  Images ........... fitted to the printable area, or printed at',
+    '                     any scale you ask for. Small images are',
+    '                     drawn without smoothing, so pixel art stays',
+    '                     sharp.',
     '',
     '  PDF .............. rasterised page by page.',
     '',
@@ -192,41 +221,49 @@
     '',
     'THINGS TO TRY',
     '',
-    '  1. Switch the colour mode to 1-bit dither and print an image.',
-    '     The Bayer matrix does the work a real laser printer would.',
+    '  1. Set the colour to black and white, dithered, and print an',
+    '     image. The Bayer matrix does the work a real laser printer',
+    '     would.',
     '',
-    '  2. Set the quality to High and watch the carriage sweep.',
+    '  2. Put four pages on a sheet, or ask for pages 2-4 only.',
     '',
-    '  3. Turn on printer sounds. The motor noise is filtered noise',
-    '     whose centre frequency tracks the print head across the',
-    '     page; the clunks are the rollers grabbing each sheet.',
+    '  3. Turn on printer sounds and set the quality to High. The',
+    '     motor noise is filtered noise whose centre frequency tracks',
+    '     the print head across the page; the ticks between passes',
+    '     are the rollers advancing the paper one band.',
     '',
-    '  4. Print until the toner runs out. The last few pages fade,',
+    '  4. Print until the toner runs out. The last few sheets fade,',
     '     then streak, then the job stops until you fit a new',
     '     cartridge -- exactly like the one down the hall.',
     '',
-    '  5. Click any sheet in the output tray to read it full size',
-    '     or save it as a PNG.',
+    '  5. Take a sheet off the top of the tray to read it full size,',
+    '     save it as PNG, JPEG or WebP, or turn the whole tray into',
+    '     a PDF.',
     '',
     '================================================================',
     '',
-    'HOW THE SHEET GETS ONTO THE SCREEN',
+    'HOW THE INK GETS ONTO THE PAGE',
     '',
-    'Each page is painted once, in full, onto an off-screen canvas the',
-    'true size of the sheet -- 850 by 1100 pixels for US Letter, which',
-    'is 8.5 by 11 inches at 100 pixels to the inch.',
+    'Each sheet is painted once, in full, onto an off-screen canvas',
+    'the true size of the paper -- 850 by 1100 pixels for US Letter,',
+    'which is 8.5 by 11 inches at 100 pixels to the inch. That canvas',
+    'is never shown to you.',
     '',
-    'The sheet you can see is that canvas inside a box with its',
-    'overflow hidden. Printing is nothing more than a loop on',
-    'requestAnimationFrame growing the height of that box, which is why',
-    'the page appears from the top down, in reading order, at whatever',
-    'rate the quality setting asks for. The carriage above the paper is',
-    'a rectangle parked on the bottom edge of whatever has emerged so',
-    'far, sliding side to side on a cosine.',
+    'What you watch instead is a second, blank canvas. The paper',
+    'steps forward by one band, the carriage sweeps across it, and',
+    'ink is copied from the finished page into the blank one only',
+    'across the strip the head has already passed over. Then the',
+    'paper steps again, and the carriage comes back the other way.',
+    'A band that is dark on the left and still white on the right is',
+    'a pass caught halfway through.',
     '',
-    'The frame clock advances by clamped deltas rather than by elapsed',
-    'wall time, so leaving this tab and coming back finds a sheet that',
-    'paused politely instead of one that finished without you.',
+    'Higher quality settings lay down thinner bands and take longer,',
+    'which is the same trade a real printer makes.',
+    '',
+    'The frame clock advances by clamped deltas rather than by',
+    'elapsed wall time, so leaving this tab and coming back finds a',
+    'sheet that paused politely instead of one that finished without',
+    'you.',
     '',
     '================================================================',
     '',
@@ -250,9 +287,9 @@
     if (!job || printer.busy) return;
     var opts = options();
     /* Colour and quality are read per page, but pagination is baked in. */
-    var want = R.geometry(opts.paper, opts.landscape);
-    if (job.geom.w !== want.w || job.geom.h !== want.h) await spool();
-    if (!job) return;
+    var want = R.geometry(opts.paper, opts.landscape, opts.margin, opts.scale);
+    if (job.geom.w !== want.w || job.geom.h !== want.h || job.geom.margin !== want.margin) await spool();
+    if (!job || !job.pages.length) return;
     await printer.print(job, opts);
   });
 
@@ -268,95 +305,106 @@
 
   /* ── output tray ──────────────────────────────────────────────────────── */
 
-  printer.onpage = function (canvas, meta) {
-    printed++;
-    dom.trayEmpty.hidden = true;
-    dom.btnEmpty.hidden = false;
-
-    var thumb = document.createElement('canvas');
-    var tw = 200;
-    thumb.width = tw;
-    thumb.height = Math.round(tw * canvas.height / canvas.width);
-    var tctx = thumb.getContext('2d');
-    tctx.fillStyle = '#fff';
-    tctx.fillRect(0, 0, thumb.width, thumb.height);
-    tctx.drawImage(canvas, 0, 0, thumb.width, thumb.height);
-
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'pageout';
-    btn.title = 'View page ' + printed;
-    btn.setAttribute('aria-label', 'View printed page ' + printed);
-    btn.appendChild(thumb);
-
-    var no = document.createElement('span');
-    no.className = 'pageout__no';
-    no.textContent = printed;
-    btn.appendChild(no);
-
-    btn._full = canvas;
-    btn._label = 'page ' + printed;
-    btn.addEventListener('click', function () { openViewer(btn._full, btn._label, printed); });
-
-    dom.trayStack.appendChild(btn);
-    dom.trayStack.scrollLeft = dom.trayStack.scrollWidth;
-    dom.trayCount.textContent = printed + (printed === 1 ? ' page' : ' pages');
-
-    if (!('animate' in btn)) return;
-    btn.animate([
-      { transform: 'translateY(-26px) rotate(-4deg)', opacity: 0 },
-      { transform: 'none', opacity: 1 }
-    ], { duration: 260, easing: 'cubic-bezier(.2,.8,.3,1)' });
+  printer.onpage = function (page) {
+    page.el.addEventListener('click', function () {
+      openViewer(printer.pages.indexOf(page));
+    });
   };
 
-  dom.btnEmpty.addEventListener('click', function () {
-    Array.prototype.slice.call(dom.trayStack.querySelectorAll('.pageout')).forEach(function (el) { el.remove(); });
-    printed = 0;
-    dom.trayEmpty.hidden = false;
-    dom.btnEmpty.hidden = true;
-    dom.trayCount.textContent = 'empty';
+  printer.ontray = function () {
+    var n = printer.pages.length;
+    dom.trayCount.textContent = n ? n + (n === 1 ? ' sheet' : ' sheets') : 'tray empty';
+    dom.btnEmpty.hidden = n === 0;
+    dom.btnPdf.hidden = n === 0;
+  };
+
+  dom.btnEmpty.addEventListener('click', function () { printer.emptyTray(); });
+
+  dom.btnPdf.addEventListener('click', async function () {
+    if (!printer.pages.length || dom.btnPdf.disabled) return;
+    var label = dom.btnPdf.textContent;
+    dom.btnPdf.disabled = true;
+    try {
+      var blob = await S.trayToPDF(printer.pages, function (i, n) {
+        dom.btnPdf.textContent = 'Building PDF… ' + (i + 1) + '/' + n;
+      });
+      var url = URL.createObjectURL(blob);
+      S.download(url, stem() + '.pdf');
+      setTimeout(function () { URL.revokeObjectURL(url); }, 8000);
+      printer.say(printer.pages.length + ' sheets saved as a PDF.');
+    } catch (err) {
+      printer.say(err.message || 'That PDF could not be built.');
+    }
+    dom.btnPdf.textContent = label;
+    dom.btnPdf.disabled = false;
   });
+
+  /* A filename that looks like it came from the document, not from a counter. */
+  function stem() {
+    var name = (job && job.name) || 'web-printer';
+    return name.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '-').slice(0, 60) || 'web-printer';
+  }
 
   /* ── page viewer ──────────────────────────────────────────────────────── */
 
-  var viewing = null;
+  var viewing = -1;
 
-  function openViewer(canvas, label, n) {
-    viewing = { canvas: canvas, n: n };
-    dom.viewerTitle.textContent = label;
-    dom.viewerBody.innerHTML = '';
-    var copy = document.createElement('canvas');
-    copy.width = canvas.width;
-    copy.height = canvas.height;
-    copy.getContext('2d').drawImage(canvas, 0, 0);
-    dom.viewerBody.appendChild(copy);
-    if (typeof dom.viewer.showModal === 'function') dom.viewer.showModal();
-    else dom.viewer.setAttribute('open', '');
+  function openViewer(index) {
+    var page = printer.pages[index];
+    if (!page) return;
+    viewing = index;
+    dom.viewerImg.src = page.url;
+    dom.viewerTitle.textContent = 'Sheet ' + page.n + ' of ' + printer.pages.length;
+    dom.viewerPrev.disabled = index <= 0;
+    dom.viewerNext.disabled = index >= printer.pages.length - 1;
+    if (!dom.viewer.open) {
+      if (typeof dom.viewer.showModal === 'function') dom.viewer.showModal();
+      else dom.viewer.setAttribute('open', '');
+    }
   }
 
+  function step(by) {
+    var next = viewing + by;
+    if (next >= 0 && next < printer.pages.length) openViewer(next);
+  }
+
+  S.formats().forEach(function (f) {
+    var opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.label;
+    dom.viewerFormat.appendChild(opt);
+  });
+
+  dom.viewerDownload.addEventListener('click', async function () {
+    var page = printer.pages[viewing];
+    if (!page) return;
+    dom.viewerDownload.disabled = true;
+    try {
+      var out = await S.pageAs(page, dom.viewerFormat.value);
+      S.download(out.url, stem() + '-sheet-' + page.n + '.' + out.ext);
+      if (out.revoke) setTimeout(function () { URL.revokeObjectURL(out.url); }, 8000);
+    } catch (err) {
+      printer.say(err.message || 'That page could not be saved.');
+    }
+    dom.viewerDownload.disabled = false;
+  });
+
+  dom.viewerPrev.addEventListener('click', function () { step(-1); });
+  dom.viewerNext.addEventListener('click', function () { step(1); });
   dom.viewerClose.addEventListener('click', function () { dom.viewer.close(); });
   dom.viewer.addEventListener('click', function (e) {
     if (e.target === dom.viewer) dom.viewer.close();   // click the backdrop
   });
-
-  dom.viewerDownload.addEventListener('click', function () {
-    if (!viewing) return;
-    viewing.canvas.toBlob(function (blob) {
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = 'web-printer-page-' + viewing.n + '.png';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-    }, 'image/png');
+  dom.viewer.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
   });
 
   /* ── boot ─────────────────────────────────────────────────────────────── */
 
   printer.lcd('READY', 'no document loaded');
   printer.onstate('idle');
+  printer.ontray();
 
   /* The live machine, for anyone who wants to poke at it from the console:
      WP.printer.toner = 3, WP.printer.print(job, opts), and so on. */

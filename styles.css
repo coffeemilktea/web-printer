@@ -20,6 +20,7 @@
   --shell-in:  #2a2a2b;   /* slot interior */
 
   --sheet-w:   270px;     /* on-screen width of a printed sheet */
+  --sheet-h:   349px;     /* its height — app.js updates this per paper size */
   --radius:    12px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
@@ -204,7 +205,18 @@ select, input[type="number"] {
 }
 select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
-.check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); margin-top: 4px; cursor: pointer; }
+.field__hint {
+  margin: -4px 0 12px 102px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.field__hint code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--accent);
+}
+
+.check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); margin-top: 7px; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 15px; height: 15px; }
 
 .btn {
@@ -375,39 +387,129 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   75%      { transform: translate(-.4px, .3px); }
 }
 
-/* ── the emerging sheet ───────────────────────────────────────────────── */
+/* ── the output tray, the stack, and the emerging sheet ───────────────── */
 
-/* Tall enough for the sheet currently loaded — app.js sets the exact height
-   from the paper size, so idle portrait A5 doesn't reserve a legal-sized void. */
+/* --sheet-h is set by app.js from the loaded paper size, so the tray extends
+   for Legal and pulls back in for A5 the way a real one does. */
 .out {
   position: relative;
   width: 100%;
-  min-height: calc(var(--sheet-w) * 1.3);
+  min-height: calc(var(--sheet-h) + 52px);
   margin-top: -6px;
-  display: flex;
-  justify-content: center;
   transition: min-height .25s ease;
 }
 
+/* The tray: the same plastic as the printer shell, tapering slightly toward
+   the front, with side paper guides and a front stop. */
+.tray {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(var(--sheet-w) + 54px);
+  height: calc(var(--sheet-h) + 34px);
+  z-index: 1;
+  transition: height .25s ease;
+}
+/* The finger scoop cut into the front edge, on both the floor and the stop so
+   the two line up as one opening. */
+.tray__floor,
+.tray__front {
+  -webkit-mask-image: radial-gradient(circle 24px at 50% 100%, transparent 0 24px, #000 24.5px);
+          mask-image: radial-gradient(circle 24px at 50% 100%, transparent 0 24px, #000 24.5px);
+}
+.tray__floor {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(1.6% 0, 98.4% 0, 100% 100%, 0 100%);
+  border-radius: 0 0 14px 14px;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 1px, transparent 1px 13px),
+    linear-gradient(180deg, #b3ad9e 0%, #c6c0b1 22%, #cec8b9 72%, #b8b2a3 100%);
+  box-shadow:
+    inset 0 8px 14px -8px rgba(0,0,0,.55),
+    inset 0 -2px 3px rgba(255,255,255,.35),
+    0 16px 26px -16px rgba(0,0,0,.8);
+}
+.tray__rail {
+  position: absolute;
+  top: 6px;
+  bottom: 16px;
+  width: 7px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #9c9687, #cbc5b6 45%, #a8a293);
+  box-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+.tray__rail--l { left: 5px; }
+.tray__rail--r { right: 5px; }
+
+/* The front stop, with the finger notch every paper tray has cut into it. */
+.tray__front {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(var(--sheet-h) + 14px);
+  width: calc(var(--sheet-w) + 54px);
+  height: 20px;
+  clip-path: polygon(1.6% 0, 98.4% 0, 100% 100%, 0 100%);
+  z-index: 3;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, #cec8b9, #a29c8d 65%, #8d8779);
+  box-shadow: 0 6px 14px -6px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.45);
+  transition: top .25s ease;
+}
+
+/* Sheets already printed, piled up in the tray. */
+.stack { position: absolute; inset: 0; z-index: 2; }
+
+.sheetout {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--sheet-w);
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: zoom-in;
+  transform: translateX(-50%);
+}
+.sheetout img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 1px 1px 3px 3px;
+  background: #fff;
+  box-shadow: 0 5px 12px -6px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.28);
+}
+/* Only the top sheet reacts — the rest are pinned under it, as they would be. */
+.sheetout:last-child:hover img,
+.sheetout:focus-visible img {
+  box-shadow: 0 10px 20px -6px rgba(0,0,0,.9), 0 0 0 1px var(--accent);
+}
+.sheetout:focus-visible { outline: none; }
+
+/* The sheet coming through: a canvas painted band by band, inside a box whose
+   height is however much paper has been fed out so far. */
 .sheet {
   position: absolute;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
   width: var(--sheet-w);
-  height: 0;                       /* grows as the page is printed */
+  height: 0;
   overflow: hidden;
   background: #fff;
   border-radius: 0 0 2px 2px;
   box-shadow: 0 14px 26px -10px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.35);
-  z-index: 2;
+  z-index: 4;
 }
 .sheet canvas { display: block; width: var(--sheet-w); height: auto; }
-.sheet__ink {                      /* wet-ink glow on the freshly printed edge */
+.sheet__ink {                      /* wet-ink sheen on the band just laid down */
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  height: 14px;
-  background: linear-gradient(180deg, transparent, rgba(90,110,150,.22));
+  height: 12px;
+  background: linear-gradient(180deg, transparent, rgba(90,110,150,.2));
   pointer-events: none;
 }
 
@@ -422,7 +524,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   background: linear-gradient(180deg, #55525a, #2e2c33);
   box-shadow: 0 3px 8px rgba(0,0,0,.55);
   opacity: 0;
-  z-index: 4;
+  z-index: 5;
   pointer-events: none;
 }
 .head.is-on { opacity: 1; }
@@ -446,66 +548,26 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   opacity: .85;
 }
 
-.status {
-  margin: 14px 0 0;
-  min-height: 20px;
+/* ── the line under the machine ───────────────────────────────────────── */
+
+.stage__bar {
+  width: 100%;
+  margin-top: 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
   font-size: 12.5px;
   color: var(--muted);
-  text-align: center;
 }
-
-/* ── output tray ──────────────────────────────────────────────────────── */
-
-.tray {
-  background: linear-gradient(180deg, var(--panel), var(--desk-2));
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 18px 18px;
-}
-.tray__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.tray__head h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .13em; color: var(--muted); }
-.tray__actions { display: flex; align-items: baseline; gap: 14px; }
-.tray__count { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-
-.tray__stack {
+.status { margin: 0; }
+.stage__tray {
+  margin: 0;
   display: flex;
   gap: 12px;
-  overflow-x: auto;
-  padding: 6px 2px 12px;
-  min-height: 132px;
-  align-items: flex-start;
-  scrollbar-color: var(--line) transparent;
-}
-.tray__empty { color: var(--muted); font-size: 12.5px; margin: 0; align-self: center; }
-
-.pageout {
-  flex: 0 0 auto;
-  position: relative;
-  border: 0;
-  padding: 0;
-  background: none;
-  cursor: zoom-in;
-  border-radius: 2px;
-  line-height: 0;
-}
-.pageout canvas {
-  display: block;
-  width: 88px;
-  height: auto;
-  background: #fff;
-  border-radius: 2px;
-  box-shadow: 0 5px 14px -4px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.35);
-  transition: transform .16s ease, box-shadow .16s ease;
-}
-.pageout:hover canvas { transform: translateY(-4px) rotate(-1deg); box-shadow: 0 12px 22px -6px rgba(0,0,0,.8), 0 0 0 1px var(--accent); }
-.pageout__no {
-  position: absolute;
-  bottom: -2px; left: 50%;
-  transform: translate(-50%, 100%);
+  align-items: baseline;
   font-family: var(--mono);
-  font-size: 10px;
-  color: var(--muted);
-  line-height: 1;
+  font-size: 11.5px;
 }
 
 /* ── page viewer ──────────────────────────────────────────────────────── */
@@ -522,8 +584,16 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .viewer::backdrop { background: rgba(8,8,10,.78); backdrop-filter: blur(3px); }
 .viewer__bar { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-family: var(--mono); color: var(--muted); }
 .viewer__spacer { flex: 1; }
+.viewer__save { display: flex; align-items: center; gap: 7px; }
+.viewer__save select {
+  width: auto;
+  padding: 4px 7px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+.viewer__bar button[disabled] { opacity: .45; cursor: default; }
 .viewer__body { padding: 18px; display: grid; place-items: center; max-height: 76vh; overflow: auto; }
-.viewer__body canvas { width: 100%; max-width: 520px; height: auto; background: #fff; box-shadow: 0 12px 30px -8px rgba(0,0,0,.8); }
+.viewer__body img { width: 100%; max-width: 520px; height: auto; background: #fff; box-shadow: 0 12px 30px -8px rgba(0,0,0,.8); }
 
 /* ── footer ───────────────────────────────────────────────────────────── */
 
@@ -541,6 +611,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   .layout { grid-template-columns: 1fr; }
   .col--stage { order: -1; }
   :root { --sheet-w: 230px; }
+  .stage__bar { flex-direction: column; align-items: center; gap: 6px; }
 }
 @media (max-width: 420px) {
   :root { --sheet-w: 190px; }

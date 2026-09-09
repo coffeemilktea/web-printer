@@ -33,19 +33,77 @@
      waits forever on a standard font it can't fetch. */
   var PDFJS_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
   var PDF_TIMEOUT = 30000;
+  var RASTER = 2.2;                 // how finely PDF pages are rasterised
 
   /* ── geometry ─────────────────────────────────────────────────────────── */
 
-  function geometry(paperKey, landscape) {
+  var MARGINS = { none: 0, narrow: 30, normal: 58, wide: 92 };
+
+  function geometry(paperKey, landscape, marginKey, scale) {
     var p = PAPER[paperKey] || PAPER.letter;
+    var m = MARGINS[marginKey];
+    var z = typeof scale === 'number' && scale > 0 ? scale : 1;
+    if (m == null) m = MARGINS.normal;
     return {
       w: landscape ? p.h : p.w,
       h: landscape ? p.w : p.h,
-      margin: 58,
-      fontPx: 13,
-      lineH: 17,
+      margin: m,
+      scale: z,
+      fit: scale === 'fit' || scale == null,
+      fontPx: Math.round(13 * z * 10) / 10,
+      lineH: Math.round(17 * z * 10) / 10,
       label: p.label + (landscape ? ' landscape' : '')
     };
+  }
+
+  /* "3, 5-8" → the page indices to keep, in the order asked for. */
+  function selectRange(pages, spec) {
+    if (!spec || !spec.trim() || /^all$/i.test(spec.trim())) return pages;
+    var seen = {}, out = [];
+    spec.split(',').forEach(function (part) {
+      var m = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+      if (!m) return;
+      var a = parseInt(m[1], 10);
+      var b = m[2] ? parseInt(m[2], 10) : a;
+      for (var i = Math.min(a, b); i <= Math.max(a, b); i++) {
+        if (i >= 1 && i <= pages.length && !seen[i]) { seen[i] = 1; out.push(pages[i - 1]); }
+      }
+    });
+    return out;
+  }
+
+  /* Several logical pages tiled onto one sheet, the way n-up printing does. */
+  function tileUp(pages, g, n) {
+    if (!n || n < 2 || pages.length < 2) return pages;
+    var cols = n === 4 ? 2 : (g.w > g.h ? 2 : 1);
+    var rows = n / cols;
+    var gap = 14;
+    var cellW = (g.w - gap * (cols + 1)) / cols;
+    var cellH = (g.h - gap * (rows + 1)) / rows;
+
+    var sheets = [];
+    for (var i = 0; i < pages.length; i += n) sheets.push(pages.slice(i, i + n));
+
+    return sheets.map(function (group) {
+      return function (ctx) {
+        group.forEach(function (draw, k) {
+          var off = document.createElement('canvas');
+          off.width = g.w;
+          off.height = g.h;
+          var octx = off.getContext('2d');
+          octx.fillStyle = '#ffffff';
+          octx.fillRect(0, 0, g.w, g.h);
+          draw(octx);
+
+          var x = gap + (k % cols) * (cellW + gap);
+          var y = gap + Math.floor(k / cols) * (cellH + gap);
+          ctx.drawImage(off, x, y, cellW, cellH);
+          ctx.strokeStyle = '#dcdad3';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+        });
+      };
+    });
   }
 
   /* ── small helpers ────────────────────────────────────────────────────── */
@@ -226,13 +284,22 @@
       drawChrome(ctx, g, info, 0, 1);
       var boxW = g.w - g.margin * 2;
       var boxH = g.h - g.margin * 2 - 26;
-      var s = Math.min(boxW / img.naturalWidth, boxH / img.naturalHeight);
+      /* Fit shrinks (or grows) the image to the printable area; a percentage
+         prints at that fraction of actual size and clips like a real printer. */
+      var s = g.fit
+        ? Math.min(boxW / img.naturalWidth, boxH / img.naturalHeight)
+        : g.scale;
       var w = img.naturalWidth * s, h = img.naturalHeight * s;
       var x = (g.w - w) / 2, y = g.margin + (boxH - h) / 2;
 
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(g.margin, g.margin, boxW, boxH);
+      ctx.clip();
       if (s > 2) ctx.imageSmoothingEnabled = false;   // keep pixel art crisp
       ctx.drawImage(img, x, y, w, h);
       ctx.imageSmoothingEnabled = true;
+      ctx.restore();
 
       ctx.fillStyle = '#9a978d';
       ctx.font = '11px ' + MONO;
@@ -263,7 +330,7 @@
       /* Rasterise up front so printing never stalls waiting on pdf.js. */
       var page = await doc.getPage(n);
       var vp1 = page.getViewport({ scale: 1 });
-      var scale = Math.min((g.w - g.margin) / vp1.width, (g.h - g.margin) / vp1.height) * 1.6;
+      var scale = RASTER;
       var vp = page.getViewport({ scale: scale });
       var off = document.createElement('canvas');
       off.width = Math.max(1, Math.round(vp.width));
@@ -276,28 +343,51 @@
       return function (ctx) {
         drawChrome(ctx, g, info, index, count);
         var boxW = g.w - g.margin * 2, boxH = g.h - g.margin * 2;
-        var s = Math.min(boxW / bmp.width, boxH / bmp.height);
+        var s = g.fit
+          ? Math.min(boxW / bmp.width, boxH / bmp.height)
+          : g.scale * (100 / 72) / RASTER;      // PDF points → page pixels
         var w = bmp.width * s, h = bmp.height * s;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(g.margin, g.margin, boxW, boxH);
+        ctx.clip();
         ctx.drawImage(bmp, (g.w - w) / 2, g.margin + (boxH - h) / 2, w, h);
+        ctx.restore();
       };
     });
   }
 
   /* ── the job builder ──────────────────────────────────────────────────── */
 
+  /* Every path ends here: the page range is applied first, then n-up tiling,
+     which is the order a real driver does it in. */
+  function finish(job, opts) {
+    job.logical = job.pages.length;
+    var chosen = selectRange(job.pages, opts.range);
+    if (!chosen.length) {
+      job.pages = [];
+      job.selected = 0;
+      job.note = 'No pages match that range — the document has ' + job.logical + '.';
+      return job;
+    }
+    job.selected = chosen.length;
+    job.pages = tileUp(chosen, job.geom, opts.nup);
+    return job;
+  }
+
   async function buildJob(file, opts) {
     if (file.size > LIMITS.file) {
       throw new Error('That file is ' + formatBytes(file.size) + '. The limit is ' + formatBytes(LIMITS.file) + '.');
     }
 
-    var g = geometry(opts.paper, opts.landscape);
+    var g = geometry(opts.paper, opts.landscape, opts.margin, opts.scale);
     var info = {
       name: file.name || 'untitled',
       stamp: new Date().toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
       })
     };
-    var job = { name: info.name, size: file.size, geom: g, note: '', kind: '', pages: [] };
+    var job = { name: info.name, size: file.size, geom: g, note: '', kind: '', pages: [], logical: 0 };
 
     var ext = (info.name.split('.').pop() || '').toLowerCase();
     var isPdf = file.type === 'application/pdf' || ext === 'pdf';
@@ -310,7 +400,7 @@
         var img = await loadImage(url);
         job.kind = 'Image';
         job.pages = [imagePage(img, g, info, img.naturalWidth + ' × ' + img.naturalHeight + ' px · ' + formatBytes(file.size))];
-        return job;
+        return finish(job, opts);
       } catch (e) {
         job.note = 'That image could not be decoded, so it was printed as a hex dump.';
       }
@@ -324,7 +414,7 @@
         job.pages = await withTimeout(pdfPages(buf, g, info), PDF_TIMEOUT, 'PDF rendering');
         job.kind = 'PDF';
         if (job.pages.length === LIMITS.pdfPages) job.note = 'Only the first ' + LIMITS.pdfPages + ' pages were spooled.';
-        return job;
+        return finish(job, opts);
       } catch (e) {
         job.note = e && e.name === 'PasswordException'
           ? 'That PDF is password-protected, so it printed as a hex dump.'
@@ -342,7 +432,7 @@
       } else if (!job.note) {
         job.note = 'Not a text file, so it printed as a hex dump.';
       }
-      return job;
+      return finish(job, opts);
     }
 
     /* Text ---------------------------------------------------------------- */
@@ -354,7 +444,7 @@
     if (Math.ceil(lines.length / m.rows) > LIMITS.textPages) {
       job.note = 'Long document — printing stops at ' + LIMITS.textPages + ' pages.';
     }
-    return job;
+    return finish(job, opts);
   }
 
   /* ── colour modes, applied to a finished page ─────────────────────────── */
@@ -424,8 +514,10 @@
     PAPER: PAPER,
     LIMITS: LIMITS,
     MONO: MONO,
+    MARGINS: MARGINS,
     geometry: geometry,
     buildJob: buildJob,
+    selectRange: selectRange,
     applyColorMode: applyColorMode,
     fadeForToner: fadeForToner,
     formatBytes: formatBytes,

@@ -61,10 +61,10 @@
     </div>
 
     <div class="panel">
-      <h2 class="panel__title">2 · Settings</h2>
+      <h2 class="panel__title">2 · Page setup</h2>
 
       <div class="field">
-        <label for="paper">Paper</label>
+        <label for="paper">Paper size</label>
         <select id="paper">
           <option value="letter" selected>Letter · 8.5 × 11 in</option>
           <option value="a4">A4 · 210 × 297 mm</option>
@@ -82,11 +82,54 @@
       </div>
 
       <div class="field">
+        <label for="scale">Scale</label>
+        <select id="scale">
+          <option value="fit" selected>Fit to page</option>
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1">100% — actual size</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+          <option value="2">200%</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="margin">Margins</label>
+        <select id="margin">
+          <option value="normal" selected>Normal</option>
+          <option value="narrow">Narrow</option>
+          <option value="wide">Wide</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="nup">Per sheet</label>
+        <select id="nup">
+          <option value="1" selected>1 page</option>
+          <option value="2">2 pages</option>
+          <option value="4">4 pages</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel__title">3 · Print job</h2>
+
+      <div class="field">
+        <label for="range">Pages</label>
+        <input id="range" type="text" value="All" spellcheck="false"
+               aria-describedby="range-hint" />
+      </div>
+      <p id="range-hint" class="field__hint">All, or a list like <code>1-3, 7</code></p>
+
+      <div class="field">
         <label for="colormode">Colour</label>
         <select id="colormode">
-          <option value="color" selected>Full colour</option>
-          <option value="gray">Greyscale</option>
-          <option value="dither">1-bit dither</option>
+          <option value="color" selected>Colour</option>
+          <option value="gray">Black &amp; white</option>
+          <option value="dither">Black &amp; white — dithered</option>
         </select>
       </div>
 
@@ -104,6 +147,14 @@
         <input id="copies" type="number" min="1" max="5" value="1" />
       </div>
 
+      <label class="check">
+        <input id="collate" type="checkbox" checked />
+        <span>Collate copies</span>
+      </label>
+      <label class="check">
+        <input id="reverse" type="checkbox" />
+        <span>Reverse page order</span>
+      </label>
       <label class="check">
         <input id="sound" type="checkbox" />
         <span>Printer sounds</span>
@@ -158,31 +209,38 @@
         <div class="printer__lip" aria-hidden="true"></div>
       </div>
 
-      <!-- everything below the slot: the emerging sheet + the print head -->
+      <!-- everything below the slot: the output tray, the stack of printed
+           sheets, and the sheet currently coming through -->
       <div class="out" id="out">
-        <div class="head" id="head" aria-hidden="true"><i></i></div>
+
+        <div class="tray" aria-hidden="true">
+          <div class="tray__floor"></div>
+          <div class="tray__rail tray__rail--l"></div>
+          <div class="tray__rail tray__rail--r"></div>
+        </div>
+
+        <div class="stack" id="stack"></div>
+
+        <div class="tray__front" aria-hidden="true"></div>
+
         <div class="sheet" id="sheet">
           <div class="sheet__ink" aria-hidden="true"></div>
         </div>
+        <div class="head" id="head" aria-hidden="true"><i></i></div>
       </div>
 
-      <p class="status" id="status" role="status" aria-live="polite">Printer idle.</p>
-    </div>
-
-    <div class="tray">
-      <div class="tray__head">
-        <h2>Output tray</h2>
-        <div class="tray__actions">
-          <span id="tray-count" class="tray__count">empty</span>
+      <div class="stage__bar">
+        <p class="status" id="status" role="status" aria-live="polite">Printer idle.</p>
+        <p class="stage__tray">
+          <span id="tray-count">tray empty</span>
+          <button id="btn-pdf" class="linkbtn" type="button" hidden>Save tray as PDF</button>
           <button id="btn-empty" class="linkbtn" type="button" hidden>Empty tray</button>
-        </div>
-      </div>
-      <div class="tray__stack" id="tray-stack">
-        <p class="tray__empty" id="tray-empty">Printed pages land here.</p>
+        </p>
       </div>
     </div>
   </section>
 </main>
+
 
 <footer class="foot">
   <p>Everything runs client-side — your file is read in the browser and never uploaded anywhere.</p>
@@ -190,15 +248,22 @@
 
 <dialog class="viewer" id="viewer">
   <div class="viewer__bar">
+    <button id="viewer-prev" class="linkbtn" type="button" aria-label="Previous page">&#8592;</button>
     <span id="viewer-title">Page</span>
+    <button id="viewer-next" class="linkbtn" type="button" aria-label="Next page">&#8594;</button>
     <span class="viewer__spacer"></span>
-    <button id="viewer-download" class="linkbtn" type="button">Download PNG</button>
+    <label class="viewer__save">
+      <span>Save as</span>
+      <select id="viewer-format"></select>
+    </label>
+    <button id="viewer-download" class="linkbtn" type="button">Download</button>
     <button id="viewer-close" class="linkbtn" type="button">Close</button>
   </div>
-  <div class="viewer__body" id="viewer-body"></div>
+  <div class="viewer__body"><img id="viewer-img" alt="Printed page" /></div>
 </dialog>
 
 <script src="js/render.js"></script>
+<script src="js/save.js"></script>
 <script src="js/printer.js"></script>
 <script src="js/app.js"></script>
 </body>
