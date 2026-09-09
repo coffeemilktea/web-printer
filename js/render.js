@@ -422,6 +422,36 @@
       }
     }
 
+    /* Word ---------------------------------------------------------------- */
+    var shape = global.WP.office ? global.WP.office.looksLike(buf) : '';
+    var isWord = /wordprocessingml|msword/.test(file.type) || /^(docx?|dotx?)$/.test(ext);
+
+    /* Any zip or OLE file gets offered to the Word reader — plenty of them
+       arrive with no extension at all — and falls through if it isn't one. */
+    if (!job.note && shape) {
+      try {
+        var read = await global.WP.office.read(buf);
+        var painters = global.WP.richtext.paginate(read.blocks, g);
+        job.kind = read.kind;
+        job.pages = painters.map(function (paint, index) {
+          return function (ctx) {
+            drawChrome(ctx, g, info, index, painters.length);
+            paint(ctx);
+          };
+        });
+        if (read.kind === 'Word 97–2003') {
+          job.note = 'Legacy .doc — the text and paragraphs come through, but its ' +
+                     'character formatting lives in binary style tables and is not read.';
+        }
+        return finish(job, opts);
+      } catch (e) {
+        if (isWord) {
+          job.note = (e && e.message ? e.message : 'That Word file could not be read.') +
+                     ' It printed as a hex dump instead.';
+        }
+      }
+    }
+
     /* Binary → hex dump --------------------------------------------------- */
     if (job.note || looksBinary(buf)) {
       var hl = hexLines(buf);

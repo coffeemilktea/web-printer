@@ -15,6 +15,8 @@ Everything is client-side. Your file is read with `FileReader`, laid out on a
 | Input | Result |
 |---|---|
 | Text, code, Markdown, CSV, JSON, logs | Paginated monospace with a running header and page numbers |
+| Word `.docx` | Laid out properly — headings, bold/italic/underline, alignment, indents, bullet and numbered lists, and tables that split across sheets |
+| Word `.doc` (97–2003) | Text and paragraph structure, read straight out of the OLE compound file |
 | PNG, JPEG, GIF, WebP, SVG, BMP | Fitted to the sheet or printed at any scale, captioned with its pixel size |
 | PDF | Rasterised page by page (via pdf.js, loaded on demand) |
 | Anything else | Hex dump — 16 bytes per line with the ASCII gutter |
@@ -77,6 +79,10 @@ works too, though some browsers restrict `file://` pages.
 ```
 index.html      markup for the print dialog, the printer, and the tray
 styles.css      the whole machine — printer and tray are CSS boxes and gradients
+js/office.js    Word files: a ZIP reader for .docx, an OLE compound file and
+                piece-table reader for .doc, both producing one block list
+js/richtext.js  laying those blocks out — measuring runs, wrapping lines,
+                breaking tables across sheets
 js/render.js    file → sheets. A page is a function (ctx) => void that paints
                 one sheet; pagination, scale, margins, n-up, ranges, hex
                 dumps, images, PDF, colour modes
@@ -85,6 +91,24 @@ js/printer.js   the machine: LCD, LEDs, the band-by-band print run, the tray
 js/save.js      PNG/JPEG/WebP re-encoding and the PDF writer
 js/app.js       wiring: file pickers, settings, the tray, the page viewer
 ```
+
+## Word files, without a library
+
+`.docx` is a ZIP of XML, so `office.js` carries a small ZIP reader — locate the
+end-of-central-directory record, walk the entries, and inflate only the two
+members worth reading (`word/document.xml` and `word/numbering.xml`) through
+`DecompressionStream('deflate-raw')`, falling back to fflate where the browser
+has no native inflate. The WordprocessingML walker keeps run styling, paragraph
+alignment and indents, heading styles, list numbering, and table structure.
+
+`.doc` is the older OLE compound file, which takes real work: read the header's
+sector shifts, rebuild the FAT from the DIFAT, walk the directory to find the
+`WordDocument` and table streams (including the mini-FAT for small streams),
+then read `fcClx` out of the FIB, step over the property runs to the piece
+table, and reassemble the text from its pieces — each one either CP1252 or
+UTF-16 depending on a bit in its file offset. Character formatting in that
+format lives in separate binary style tables, so `.doc` comes through as text
+with its paragraphs intact, and the tool says so rather than pretending.
 
 The animation is the part worth reading. Each sheet is painted once, in full,
 to an off-screen canvas you never see. The visible sheet starts blank; on every
