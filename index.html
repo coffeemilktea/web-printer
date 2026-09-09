@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>web-printer — a virtual printer for your browser</title>
+<meta name="description" content="Upload a file and watch a virtual printer physically print it, page by page. Everything happens in your browser; no file ever leaves your machine." />
+<meta name="color-scheme" content="dark" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🖨️</text></svg>" />
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__brand">
+    <span class="masthead__mark" aria-hidden="true">🖨</span>
+    <div>
+      <h1>web-printer</h1>
+      <p>Drop in a file and watch it print. Nothing leaves your browser.</p>
+    </div>
+  </div>
+  <a class="masthead__link" href="https://github.com/coffeemilktea/web-printer" target="_blank" rel="noopener">View source</a>
+</header>
+
+<main class="layout">
+
+  <!-- ─────────────────────────  CONTROL COLUMN  ───────────────────────── -->
+  <section class="col col--controls" aria-label="Document and printer settings">
+
+    <div class="panel">
+      <h2 class="panel__title">1 · Document</h2>
+
+      <div id="drop" class="drop" tabindex="0" role="button"
+           aria-label="Choose a file to print, or drop one here">
+        <div class="drop__icon" aria-hidden="true">
+          <span class="drop__page"></span>
+        </div>
+        <p class="drop__lead">Drop a file here</p>
+        <p class="drop__sub">or click to browse · or paste with <kbd>⌘V</kbd></p>
+        <input id="file" type="file" hidden />
+      </div>
+
+      <p class="drop__types">
+        Text &amp; code · Markdown · CSV · JSON · Images · PDF · anything else prints as a hex dump
+      </p>
+
+      <div id="docinfo" class="docinfo" hidden>
+        <div class="docinfo__row">
+          <span class="docinfo__name" id="doc-name">—</span>
+          <button id="btn-clear" class="linkbtn" type="button">remove</button>
+        </div>
+        <dl class="docinfo__meta">
+          <div><dt>Type</dt><dd id="doc-kind">—</dd></div>
+          <div><dt>Size</dt><dd id="doc-size">—</dd></div>
+          <div><dt>Pages</dt><dd id="doc-pages">—</dd></div>
+        </dl>
+        <p id="doc-note" class="docinfo__note" hidden></p>
+      </div>
+
+      <button id="btn-sample" class="linkbtn linkbtn--block" type="button">Load a sample document instead</button>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel__title">2 · Settings</h2>
+
+      <div class="field">
+        <label for="paper">Paper</label>
+        <select id="paper">
+          <option value="letter" selected>Letter · 8.5 × 11 in</option>
+          <option value="a4">A4 · 210 × 297 mm</option>
+          <option value="legal">Legal · 8.5 × 14 in</option>
+          <option value="a5">A5 · 148 × 210 mm</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="orient">Orientation</label>
+        <select id="orient">
+          <option value="portrait" selected>Portrait</option>
+          <option value="landscape">Landscape</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="colormode">Colour</label>
+        <select id="colormode">
+          <option value="color" selected>Full colour</option>
+          <option value="gray">Greyscale</option>
+          <option value="dither">1-bit dither</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="quality">Quality</label>
+        <select id="quality">
+          <option value="draft">Draft — fast</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High — slow</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="copies">Copies</label>
+        <input id="copies" type="number" min="1" max="5" value="1" />
+      </div>
+
+      <label class="check">
+        <input id="sound" type="checkbox" />
+        <span>Printer sounds</span>
+      </label>
+    </div>
+
+    <div class="panel panel--actions">
+      <button id="btn-print" class="btn btn--go" type="button" disabled>Print</button>
+      <button id="btn-cancel" class="btn" type="button" hidden>Cancel job</button>
+
+      <div class="toner">
+        <div class="toner__head">
+          <span>Toner</span>
+          <span id="toner-pct">100%</span>
+        </div>
+        <div class="toner__bar"><i id="toner-fill" style="width:100%"></i></div>
+        <button id="btn-toner" class="linkbtn" type="button">Replace cartridge</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────  PRINTER COLUMN  ───────────────────────── -->
+  <section class="col col--stage" aria-label="Printer">
+
+    <div class="stage">
+
+      <div class="printer" id="printer">
+        <!-- paper waiting in the input tray -->
+        <div class="printer__feed" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+
+        <div class="printer__body">
+          <div class="printer__vent" aria-hidden="true"></div>
+
+          <div class="printer__panel">
+            <div class="lcd" aria-hidden="true">
+              <div class="lcd__line lcd__line--1" id="lcd-1">READY</div>
+              <div class="lcd__line lcd__line--2" id="lcd-2">no document loaded</div>
+              <div class="lcd__bar"><i id="lcd-fill"></i></div>
+            </div>
+            <div class="leds">
+              <span class="led led--power is-on" title="Power"></span>
+              <span class="led led--data" id="led-data" title="Data"></span>
+              <span class="led led--error" id="led-error" title="Error"></span>
+            </div>
+          </div>
+
+          <div class="printer__slot" aria-hidden="true"></div>
+        </div>
+
+        <div class="printer__lip" aria-hidden="true"></div>
+      </div>
+
+      <!-- everything below the slot: the emerging sheet + the print head -->
+      <div class="out" id="out">
+        <div class="head" id="head" aria-hidden="true"><i></i></div>
+        <div class="sheet" id="sheet">
+          <div class="sheet__ink" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite">Printer idle.</p>
+    </div>
+
+    <div class="tray">
+      <div class="tray__head">
+        <h2>Output tray</h2>
+        <div class="tray__actions">
+          <span id="tray-count" class="tray__count">empty</span>
+          <button id="btn-empty" class="linkbtn" type="button" hidden>Empty tray</button>
+        </div>
+      </div>
+      <div class="tray__stack" id="tray-stack">
+        <p class="tray__empty" id="tray-empty">Printed pages land here.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Everything runs client-side — your file is read in the browser and never uploaded anywhere.</p>
+</footer>
+
+<dialog class="viewer" id="viewer">
+  <div class="viewer__bar">
+    <span id="viewer-title">Page</span>
+    <span class="viewer__spacer"></span>
+    <button id="viewer-download" class="linkbtn" type="button">Download PNG</button>
+    <button id="viewer-close" class="linkbtn" type="button">Close</button>
+  </div>
+  <div class="viewer__body" id="viewer-body"></div>
+</dialog>
+
+<script src="js/render.js"></script>
+<script src="js/printer.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
