@@ -19,7 +19,9 @@
     high:   { h: 34, sweep: 88, feed: 34 }
   };
 
-  var STACK_MAX = 24;         // sheets kept in the tray's DOM; older ones are buried anyway
+  var STACK_MAX = 30;         // sheets kept in the tray's DOM
+  var FAN_MAX = 168;          // how far down the tray the pile is allowed to fan
+  var FAN_STEP = 13;          // the step it prefers when there is room
   var reduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -326,7 +328,24 @@
     this.dom.head.classList.remove('is-on');
   };
 
-  /* A sheet settling into the tray: it never lands square, so neither do these. */
+  /* Each sheet is stepped further down the tray than the one beneath it, so
+     the whole job stays visible. The step shrinks as the pile grows, and the
+     tray extends to hold however far it fans. */
+  Printer.prototype._fan = function () {
+    var sheets = this.dom.stack.children;
+    var step = sheets.length > 1
+      ? Math.min(FAN_STEP, FAN_MAX / (sheets.length - 1))
+      : FAN_STEP;
+
+    this.dom.stack.style.setProperty('--step', step.toFixed(2) + 'px');
+    for (var i = 0; i < sheets.length; i++) sheets[i].style.setProperty('--i', i);
+
+    var reach = Math.max(0, (sheets.length - 1) * step);
+    this.dom.stage.style.setProperty('--cascade', Math.round(reach) + 'px');
+  };
+
+  /* A sheet settling into the tray: paper never lands square, so neither
+     does this. */
   Printer.prototype._stack = function (url) {
     var n = this.pages.length + 1;
     var el = document.createElement('button');
@@ -339,23 +358,22 @@
     img.alt = '';
     el.appendChild(img);
 
-    var dx = (Math.random() * 9 - 4.5).toFixed(1);
-    var dy = (7 + Math.random() * 6).toFixed(1);
-    var turn = (Math.random() * 3 - 1.5).toFixed(2);
-    var rest = 'translate(calc(-50% + ' + dx + 'px), ' + dy + 'px) rotate(' + turn + 'deg)';
-    el.style.transform = rest;
-    el.style.zIndex = String(n);
+    el.style.setProperty('--dx', (Math.random() * 7 - 3.5).toFixed(1) + 'px');
+    el.style.setProperty('--dy', (Math.random() * 3).toFixed(1) + 'px');
+    el.style.setProperty('--rot', (Math.random() * 1.6 - 0.8).toFixed(2) + 'deg');
 
     this.dom.stack.appendChild(el);
     while (this.dom.stack.children.length > STACK_MAX) {
       this.dom.stack.removeChild(this.dom.stack.firstChild);
     }
+    this._fan();
 
-    if (!reduceMotion && el.animate) {
-      el.animate(
-        [{ transform: 'translate(-50%, -5px) rotate(0deg)' }, { transform: rest }],
-        { duration: 340, easing: 'cubic-bezier(.22,1.2,.4,1)' }
-      );
+    /* Start it a little high and let the transition drop it onto the pile. */
+    if (!reduceMotion) {
+      el.classList.add('is-landing');
+      var settle = function () { el.classList.remove('is-landing'); };
+      requestAnimationFrame(settle);
+      setTimeout(settle, 250);
     }
 
     var page = { url: url, n: n, el: el };
@@ -370,6 +388,7 @@
     });
     this.pages = [];
     this.dom.stack.textContent = '';
+    this._fan();
     if (this.ontray) this.ontray();
   };
 

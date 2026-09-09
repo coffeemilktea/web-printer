@@ -14,10 +14,12 @@
   --warn:      #f0a53a;
   --err:       #ec6a5e;
 
-  --shell:     #dcd7c9;   /* printer body */
-  --shell-2:   #c6c0b0;
-  --shell-3:   #a9a394;
-  --shell-in:  #2a2a2b;   /* slot interior */
+  --shell:     #4a4e55;   /* printer body — matte charcoal */
+  --shell-2:   #3a3d43;
+  --shell-3:   #2c2f34;
+  --shell-4:   #1e2023;
+  --shell-in:  #0e0f11;   /* slot interior */
+  --shell-edge:#5c616a;   /* the lit top edge of the plastic */
 
   --sheet-w:   270px;     /* on-screen width of a printed sheet */
   --sheet-h:   349px;     /* its height — app.js updates this per paper size */
@@ -273,113 +275,145 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   align-items: center;
 }
 
-.printer { position: relative; width: 380px; max-width: 100%; z-index: 3; }
+.printer { position: relative; width: 400px; max-width: 100%; z-index: 6; }
 
-/* sheets loaded in the rear feed tray */
-.printer__feed {
+/* The fold-up paper support on the top rear. */
+.printer__support {
   position: relative;
-  height: 38px;
-  width: 74%;
-  margin: 0 auto -4px;
+  height: 26px;
+  width: 54%;
+  margin: 0 auto -8px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, var(--shell-3), var(--shell-2));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 -2px 6px rgba(0,0,0,.4);
 }
-.printer__feed span {
+.printer__support::after {              /* the moulded grip ridge */
+  content: "";
   position: absolute;
   left: 50%;
-  bottom: 0;
-  width: 92%;
-  height: 38px;
-  background: linear-gradient(180deg, #fdfcf8, #e6e2d7);
-  border: 1px solid #b0ac9e;
-  border-bottom: 0;
-  border-radius: 3px 3px 0 0;
+  top: 7px;
+  width: 42%;
+  height: 4px;
   transform: translateX(-50%);
-  box-shadow: 0 -1px 3px rgba(0,0,0,.18);
-}
-/* back sheets sit lower, lean a little, and read slightly duller */
-.printer__feed span:nth-child(1) {
-  transform: translateX(-62%) rotate(-2.6deg);
-  height: 30px;
-  background: linear-gradient(180deg, #e8e4d8, #d3cfc2);
-}
-.printer__feed span:nth-child(2) {
-  transform: translateX(-40%) rotate(1.8deg);
-  height: 33px;
-  background: linear-gradient(180deg, #f2efe6, #dcd8cb);
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.4) 0 2px, transparent 2px 5px);
 }
 
 .printer__body {
   position: relative;
-  background: linear-gradient(180deg, var(--shell) 0%, var(--shell-2) 62%, var(--shell-3) 100%);
-  border-radius: 16px 16px 8px 8px;
-  padding: 16px 18px 0;
+  background:
+    linear-gradient(180deg, var(--shell) 0%, var(--shell-2) 46%, var(--shell-3) 88%, var(--shell-4) 100%);
+  border-radius: 13px 13px 6px 6px;
+  padding: 0 0 0;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.8),
-    inset 0 -2px 6px rgba(0,0,0,.22),
-    0 22px 40px -14px rgba(0,0,0,.75),
-    0 3px 10px rgba(0,0,0,.4);
+    inset 0 1px 0 var(--shell-edge),
+    inset 0 -3px 8px rgba(0,0,0,.5),
+    0 26px 44px -16px rgba(0,0,0,.85),
+    0 4px 12px rgba(0,0,0,.5);
 }
 
-.printer__vent {
-  height: 9px;
-  margin: 0 auto 12px;
-  width: 44%;
-  border-radius: 5px;
-  background: repeating-linear-gradient(90deg, #9d9789 0 2px, transparent 2px 6px);
-  opacity: .75;
-}
-
-.printer__panel {
+/* Top deck: brand plate on the left, model number on the right. */
+.printer__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding-bottom: 14px;
+  padding: 13px 20px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.35);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 70%);
+  border-radius: 13px 13px 0 0;
+}
+.printer__brand {
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -.02em;
+  color: #e7eaef;
+  opacity: .92;
+}
+.printer__model {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: #9aa2ad;
+  opacity: .8;
 }
 
-/* amber LCD */
+/* The panel sits on a slightly lighter facia, the way these machines do. */
+.printer__panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px 14px;
+  background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.3));
+}
+
 .lcd {
   flex: 1;
-  background: #17200f;
-  border: 1px solid #3f4a2c;
-  border-radius: 5px;
-  padding: 7px 9px 8px;
-  box-shadow: inset 0 2px 7px rgba(0,0,0,.7);
+  min-width: 0;
+  background: linear-gradient(180deg, #16323b, #0f2129);
+  border: 1px solid #0a1519;
+  border-radius: 4px;
+  padding: 7px 10px 8px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.75), 0 1px 0 rgba(255,255,255,.07);
   font-family: var(--mono);
   overflow: hidden;
 }
-.lcd__line { color: #b6ff5a; text-shadow: 0 0 7px rgba(150,255,60,.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd__line { color: #9fe3f5; text-shadow: 0 0 8px rgba(120,220,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lcd__line--1 { font-size: 12px; letter-spacing: .09em; }
-.lcd__line--2 { font-size: 9.5px; color: #6d9c3c; letter-spacing: .04em; margin-top: 1px; }
-.lcd__bar { height: 4px; margin-top: 6px; background: #26301a; border-radius: 2px; overflow: hidden; }
-.lcd__bar i { display: block; height: 100%; width: 0; background: #b6ff5a; box-shadow: 0 0 6px rgba(150,255,60,.6); transition: width .18s linear; }
-.lcd.is-error .lcd__line--1 { color: #ff9a6a; text-shadow: 0 0 7px rgba(255,120,60,.5); }
+.lcd__line--2 { font-size: 9.5px; color: #4f95a8; letter-spacing: .04em; margin-top: 1px; }
+.lcd__bar { height: 4px; margin-top: 6px; background: #0b1c22; border-radius: 2px; overflow: hidden; }
+.lcd__bar i { display: block; height: 100%; width: 0; background: #6fd0c8; box-shadow: 0 0 6px rgba(111,208,200,.7); transition: width .18s linear; }
+.lcd.is-error .lcd__line--1 { color: #ff9a6a; text-shadow: 0 0 8px rgba(255,120,60,.5); }
 
-.leds { display: grid; gap: 7px; }
+/* Round rubber keys, the ones that actually do something on these machines. */
+.keys { display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 10px; }
+
+.leds { display: grid; gap: 6px; }
 .led {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: #6f6a5d;
-  box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #22252a;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.8);
 }
-.led.is-on.led--power { background: #7ee06a; box-shadow: 0 0 8px rgba(126,224,106,.85); }
-.led.is-on.led--data  { background: var(--warn); box-shadow: 0 0 8px rgba(240,165,58,.85); animation: blink 1s steps(2) infinite; }
-.led.is-on.led--error { background: var(--err); box-shadow: 0 0 8px rgba(236,106,94,.85); }
+.led.is-on.led--power { background: #7ee06a; box-shadow: 0 0 8px rgba(126,224,106,.9); }
+.led.is-on.led--data  { background: var(--warn); box-shadow: 0 0 8px rgba(240,165,58,.9); animation: blink 1s steps(2) infinite; }
+.led.is-on.led--error { background: var(--err); box-shadow: 0 0 8px rgba(236,106,94,.9); }
 @keyframes blink { 50% { opacity: .35; } }
 
-/* the paper slot */
+.key {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,.5);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 620;
+  letter-spacing: .04em;
+  color: #10130f;
+  cursor: pointer;
+  background: linear-gradient(180deg, #6f767f, #4b5058);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 2px 4px rgba(0,0,0,.5);
+  transition: filter .12s, transform .06s;
+}
+.key--go   { background: linear-gradient(180deg, #b9e75c, #8ec22f); }
+.key--stop { background: linear-gradient(180deg, #f08a7f, #d1544a); color: #2a0f0c; }
+.key:hover { filter: brightness(1.12); }
+.key:active { transform: translateY(1px); box-shadow: inset 0 2px 5px rgba(0,0,0,.45); }
+.key:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.5); }
+.key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Where the paper comes out. */
 .printer__slot {
-  height: 15px;
-  margin: 0 -18px;
-  background: linear-gradient(180deg, #4a463d 0%, var(--shell-in) 45%, #17171a 100%);
-  border-top: 1px solid rgba(0,0,0,.35);
-  box-shadow: inset 0 4px 8px rgba(0,0,0,.85);
+  height: 14px;
+  background: linear-gradient(180deg, #14161a 0%, var(--shell-in) 40%, #05060700 100%), var(--shell-in);
+  border-top: 1px solid rgba(0,0,0,.6);
+  box-shadow: inset 0 5px 9px rgba(0,0,0,.95);
 }
 .printer__lip {
-  height: 12px;
-  margin: 0 6px;
-  background: linear-gradient(180deg, var(--shell-3), #8e8879);
-  border-radius: 0 0 10px 10px;
-  box-shadow: 0 12px 22px -10px rgba(0,0,0,.8);
+  height: 11px;
+  margin: 0 5px;
+  background: linear-gradient(180deg, var(--shell-3), var(--shell-4));
+  border-radius: 0 0 9px 9px;
+  box-shadow: 0 12px 22px -10px rgba(0,0,0,.9);
 }
+
 .printer.is-busy .printer__body { animation: rumble .13s linear infinite; }
 @keyframes rumble {
   0%, 100% { transform: translate(0, 0); }
@@ -389,30 +423,29 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 
 /* ── the output tray, the stack, and the emerging sheet ───────────────── */
 
-/* --sheet-h is set by app.js from the loaded paper size, so the tray extends
-   for Legal and pulls back in for A5 the way a real one does. */
+/* --sheet-h is the loaded paper; --cascade is how far the pile fans out.
+   Both are set by app.js, so the tray extends exactly as far as it needs. */
 .out {
   position: relative;
   width: 100%;
-  min-height: calc(var(--sheet-h) + 52px);
+  min-height: calc(var(--sheet-h) + var(--cascade, 0px) + 52px);
   margin-top: -6px;
   transition: min-height .25s ease;
 }
 
-/* The tray: the same plastic as the printer shell, tapering slightly toward
-   the front, with side paper guides and a front stop. */
 .tray {
   position: absolute;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
   width: calc(var(--sheet-w) + 54px);
-  height: calc(var(--sheet-h) + 34px);
+  height: calc(var(--sheet-h) + var(--cascade, 0px) + 34px);
   z-index: 1;
   transition: height .25s ease;
 }
-/* The finger scoop cut into the front edge, on both the floor and the stop so
-   the two line up as one opening. */
+
+/* The scoop cut into the front edge, on the floor and the stop alike so the
+   two line up as one opening. */
 .tray__floor,
 .tray__front {
   -webkit-mask-image: radial-gradient(circle 24px at 50% 100%, transparent 0 24px, #000 24.5px);
@@ -422,14 +455,14 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   position: absolute;
   inset: 0;
   clip-path: polygon(1.6% 0, 98.4% 0, 100% 100%, 0 100%);
-  border-radius: 0 0 14px 14px;
+  border-radius: 0 0 13px 13px;
   background:
-    repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 1px, transparent 1px 13px),
-    linear-gradient(180deg, #b3ad9e 0%, #c6c0b1 22%, #cec8b9 72%, #b8b2a3 100%);
+    repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 1px, transparent 1px 13px),
+    linear-gradient(180deg, #23262a 0%, #33373d 16%, #3c4046 70%, #2a2d32 100%);
   box-shadow:
-    inset 0 8px 14px -8px rgba(0,0,0,.55),
-    inset 0 -2px 3px rgba(255,255,255,.35),
-    0 16px 26px -16px rgba(0,0,0,.8);
+    inset 0 9px 14px -8px rgba(0,0,0,.9),
+    inset 0 -2px 3px rgba(255,255,255,.07),
+    0 18px 28px -18px rgba(0,0,0,.9);
 }
 .tray__rail {
   position: absolute;
@@ -437,32 +470,46 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   bottom: 16px;
   width: 7px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #9c9687, #cbc5b6 45%, #a8a293);
-  box-shadow: 0 1px 2px rgba(0,0,0,.35);
+  background: linear-gradient(90deg, #22252a, #4d525a 45%, #2b2e33);
+  box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
 }
 .tray__rail--l { left: 5px; }
 .tray__rail--r { right: 5px; }
 
-/* The front stop, with the finger notch every paper tray has cut into it. */
+/* The front stop doubles as the face of the paper cassette below it. */
 .tray__front {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(var(--sheet-h) + 14px);
+  top: calc(var(--sheet-h) + var(--cascade, 0px) + 14px);
   width: calc(var(--sheet-w) + 54px);
   height: 20px;
+  z-index: 100;                    /* in front of resting paper, behind a lifted sheet */
+  border-radius: 0 0 13px 13px;
   clip-path: polygon(1.6% 0, 98.4% 0, 100% 100%, 0 100%);
-  z-index: 3;
-  border-radius: 0 0 14px 14px;
-  background: linear-gradient(180deg, #cec8b9, #a29c8d 65%, #8d8779);
-  box-shadow: 0 6px 14px -6px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.45);
+  background: linear-gradient(180deg, #444951, #2b2e33 62%, #1c1e21);
+  box-shadow: 0 7px 15px -6px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.13);
   transition: top .25s ease;
 }
 
-/* Sheets already printed, piled up in the tray. */
-.stack { position: absolute; inset: 0; z-index: 2; }
+/* ── the pile of printed sheets ───────────────────────────────────────── */
+
+/* Every sheet is stepped a little further out than the one under it, so the
+   whole job is visible at once instead of just the top page. --step is set
+   from the sheet count, so twenty pages fan as far as three do. */
+.stack {
+  position: absolute;
+  inset: 0;
+  --step: 13px;
+  /* Deliberately no z-index: the sheets have to share a stacking context with
+     the tray's front stop so a lifted one can rise in front of it. */
+}
 
 .sheetout {
+  --i: 0;
+  --dx: 0px;
+  --dy: 0px;
+  --rot: 0deg;
   position: absolute;
   top: 0;
   left: 50%;
@@ -472,7 +519,11 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   background: none;
   line-height: 0;
   cursor: zoom-in;
-  transform: translateX(-50%);
+  z-index: var(--i);
+  transform:
+    translate(calc(-50% + var(--dx)), calc(var(--i) * var(--step) + var(--dy)))
+    rotate(var(--rot));
+  transition: transform .19s cubic-bezier(.2,.8,.3,1);
 }
 .sheetout img {
   display: block;
@@ -480,14 +531,31 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: auto;
   border-radius: 1px 1px 3px 3px;
   background: #fff;
-  box-shadow: 0 5px 12px -6px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.28);
+  box-shadow: 0 5px 12px -6px rgba(0,0,0,.9), 0 0 0 1px rgba(0,0,0,.45);
+  transition: box-shadow .19s ease;
 }
-/* Only the top sheet reacts — the rest are pinned under it, as they would be. */
-.sheetout:last-child:hover img,
+
+/* Point at a sheet and it comes up out of the pile, clear of the ones on
+   top of it. */
+.sheetout:hover,
+.sheetout:focus-visible {
+  z-index: 900;
+  transform:
+    translate(calc(-50% + var(--dx)), calc(var(--i) * var(--step) + var(--dy) - 15px))
+    rotate(0deg) scale(1.025);
+}
+.sheetout:hover img,
 .sheetout:focus-visible img {
-  box-shadow: 0 10px 20px -6px rgba(0,0,0,.9), 0 0 0 1px var(--accent);
+  box-shadow: 0 18px 34px -10px rgba(0,0,0,.95), 0 0 0 1px var(--accent);
 }
 .sheetout:focus-visible { outline: none; }
+
+/* Landing: the sheet drops the last few pixels onto the pile. */
+.sheetout.is-landing {
+  transform:
+    translate(calc(-50% + var(--dx)), calc(var(--i) * var(--step) + var(--dy) - 13px))
+    rotate(0deg);
+}
 
 /* The sheet coming through: a canvas painted band by band, inside a box whose
    height is however much paper has been fed out so far. */
@@ -501,8 +569,8 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   overflow: hidden;
   background: #fff;
   border-radius: 0 0 2px 2px;
-  box-shadow: 0 14px 26px -10px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.35);
-  z-index: 4;
+  box-shadow: 0 14px 26px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.45);
+  z-index: 950;
 }
 .sheet canvas { display: block; width: var(--sheet-w); height: auto; }
 .sheet__ink {                      /* wet-ink sheen on the band just laid down */
@@ -522,9 +590,9 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: 11px;
   border-radius: 3px;
   background: linear-gradient(180deg, #55525a, #2e2c33);
-  box-shadow: 0 3px 8px rgba(0,0,0,.55);
+  box-shadow: 0 3px 8px rgba(0,0,0,.6);
   opacity: 0;
-  z-index: 5;
+  z-index: 960;
   pointer-events: none;
 }
 .head.is-on { opacity: 1; }
@@ -536,7 +604,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: 17px;
   border-radius: 4px;
   background: linear-gradient(180deg, #8e8b96, #4a4852);
-  box-shadow: 0 2px 6px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.25);
+  box-shadow: 0 2px 6px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.25);
 }
 .head i::after {
   content: "";
@@ -615,7 +683,9 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 }
 @media (max-width: 420px) {
   :root { --sheet-w: 190px; }
-  .printer { width: 300px; }
+  .printer { width: 310px; }
+  .printer__panel { gap: 9px; padding: 11px 12px 12px; }
+  .key { width: 33px; height: 33px; font-size: 8.5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

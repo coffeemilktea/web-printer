@@ -182,13 +182,14 @@
     <div class="stage">
 
       <div class="printer" id="printer">
-        <!-- paper waiting in the input tray -->
-        <div class="printer__feed" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </div>
+        <!-- the fold-up paper support on the top rear -->
+        <div class="printer__support" aria-hidden="true"></div>
 
         <div class="printer__body">
-          <div class="printer__vent" aria-hidden="true"></div>
+          <div class="printer__top" aria-hidden="true">
+            <span class="printer__brand">web-printer</span>
+            <span class="printer__model">HL-2400W</span>
+          </div>
 
           <div class="printer__panel">
             <div class="lcd" aria-hidden="true">
@@ -196,10 +197,15 @@
               <div class="lcd__line lcd__line--2" id="lcd-2">no document loaded</div>
               <div class="lcd__bar"><i id="lcd-fill"></i></div>
             </div>
-            <div class="leds">
-              <span class="led led--power is-on" title="Power"></span>
-              <span class="led led--data" id="led-data" title="Data"></span>
-              <span class="led led--error" id="led-error" title="Error"></span>
+
+            <div class="keys">
+              <div class="leds" aria-hidden="true">
+                <span class="led led--power is-on" title="Power"></span>
+                <span class="led led--data" id="led-data" title="Data"></span>
+                <span class="led led--error" id="led-error" title="Error"></span>
+              </div>
+              <button class="key key--go" id="key-go" type="button" aria-label="Go">Go</button>
+              <button class="key key--stop" id="key-stop" type="button" aria-label="Stop">Stop</button>
             </div>
           </div>
 

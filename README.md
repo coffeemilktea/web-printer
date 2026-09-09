@@ -49,12 +49,25 @@ The toner cartridge drains in proportion to how much ink each sheet actually
 uses. Below 18% sheets wash out, below 9% they streak, and at zero the job
 pauses until you fit a new cartridge.
 
+## The tray
+
+The machine is a squat dark laser printer with a paper support folded up at the
+back, a backlit LCD, and Go and Stop keys that actually work — Go starts the
+job or clears a toner fault, Stop cancels it.
+
+Its output tray holds the whole job rather than hiding it. Each sheet is
+stepped a little further down the tray than the one beneath it, so every page
+in the stack shows its leading edge; the step shrinks as the pile grows, so
+twenty sheets fan no further than three do and the tray extends to match.
+Point at any sheet and it rises clear of the ones on top of it — mouse or
+keyboard, since hover and focus share the same rule.
+
 ## Getting paper back off the screen
 
 Sheets land in the tray as PNG blobs, so a page costs a few tens of kilobytes
 rather than a 3.7 MB canvas.
 
-- Click the top sheet to read any of them full size and step through the stack.
+- Click any sheet in the pile to read it full size and step through the stack.
 - Save a single sheet as **PNG, JPEG or WebP** (unsupported formats are hidden
   rather than silently falling back).
 - Save the whole tray as a **PDF** — written by hand, one image XObject per

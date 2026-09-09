@@ -20,6 +20,7 @@
     btnPrint: $('btn-print'), btnCancel: $('btn-cancel'), btnToner: $('btn-toner'),
     printer: $('printer'), head: $('head'), sheet: $('sheet'), out: $('out'),
     stack: $('stack'), stage: document.querySelector('.stage'), status: $('status'),
+    keyGo: $('key-go'), keyStop: $('key-stop'),
     lcd: document.querySelector('.lcd'), lcd1: $('lcd-1'), lcd2: $('lcd-2'), lcdFill: $('lcd-fill'),
     ledData: $('led-data'), ledError: $('led-error'),
     tonerFill: $('toner-fill'), tonerPct: $('toner-pct'), tonerBar: document.querySelector('.toner__bar'),
@@ -90,6 +91,7 @@
       dom.docNote.hidden = !job.note;
       dom.docNote.textContent = job.note || '';
       dom.btnPrint.disabled = printer.busy || !job.pages.length;
+      dom.keyGo.disabled = dom.btnPrint.disabled;
       printer.lcd('READY', job.name + ' · ' + job.pages.length + 'p · ' + job.geom.label);
       printer.say(job.pages.length
         ? 'Ready to print ' + job.pages.length + ' sheet' + (job.pages.length === 1 ? '' : 's') + '.'
@@ -102,6 +104,7 @@
       dom.docNote.hidden = false;
       dom.docNote.textContent = err.message || 'That file could not be read.';
       dom.btnPrint.disabled = true;
+      dom.keyGo.disabled = true;
       printer.lcd('ERROR', 'document rejected', true);
       printer.say(err.message || 'That file could not be read.');
     }
@@ -112,6 +115,16 @@
     var w = dom.sheet.getBoundingClientRect().width;
     if (!w) return;
     dom.stage.style.setProperty('--sheet-h', Math.ceil(w * geom.h / geom.w) + 'px');
+  }
+
+  /* The keys on the machine do what the buttons in the panel do: Go starts
+     the job, or clears a fault; Stop cancels. */
+  function pressGo() {
+    if (printer.busy) {
+      if (printer.toner <= 0) printer.replaceCartridge();
+      return;
+    }
+    if (job && job.pages.length) dom.btnPrint.click();
   }
 
   /* "3 sheets" on its own, or "3 sheets · 6 of 8 pages" once the range or
@@ -133,6 +146,7 @@
     dom.file.value = '';
     dom.docinfo.hidden = true;
     dom.btnPrint.disabled = true;
+    dom.keyGo.disabled = true;
     printer.lcd('READY', 'no document loaded');
     printer.say('Printer idle.');
   }
@@ -240,9 +254,12 @@
     '     then streak, then the job stops until you fit a new',
     '     cartridge -- exactly like the one down the hall.',
     '',
-    '  5. Take a sheet off the top of the tray to read it full size,',
-    '     save it as PNG, JPEG or WebP, or turn the whole tray into',
-    '     a PDF.',
+    '  5. Print a few copies and look at the tray. Every sheet is',
+    '     stepped a little further out than the one under it, so the',
+    '     whole job is visible at once; point at any one and it',
+    '     lifts clear of the pile. Click it to read it full size,',
+    '     save it as PNG, JPEG or WebP, or turn the whole tray',
+    '     into a PDF.',
     '',
     '================================================================',
     '',
@@ -298,6 +315,8 @@
   });
 
   dom.btnCancel.addEventListener('click', function () { printer.cancel(); });
+  dom.keyGo.addEventListener('click', pressGo);
+  dom.keyStop.addEventListener('click', function () { printer.cancel(); });
   dom.btnToner.addEventListener('click', function () { printer.replaceCartridge(); });
 
   printer.onstate = function (state) {
@@ -305,6 +324,10 @@
     dom.btnPrint.hidden = running;
     dom.btnCancel.hidden = !running;
     dom.btnPrint.disabled = !job || running;
+    dom.keyStop.disabled = !running;
+    dom.keyGo.disabled = running
+      ? state !== 'blocked'
+      : !(job && job.pages.length);
   };
 
   /* ── output tray ──────────────────────────────────────────────────────── */
