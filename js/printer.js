@@ -125,7 +125,8 @@
     this.toner = 100;
     this.busy = false;
     this.cancelled = false;
-    this.pages = [];         // {url, n, el}
+    this.pages = [];         // {url, n, id, el}
+    this._ids = 0;
     this._waiting = null;
     this._abortFeed = null;
     this.onpage = null;      // (page) => void — a sheet landed in the tray
@@ -155,6 +156,7 @@
     this.dom.tonerPct.textContent = pct + '%';
     this.dom.tonerBar.classList.toggle('is-low', pct <= 20 && pct > 0);
     this.dom.tonerBar.classList.toggle('is-out', pct === 0);
+    if (this.dom.ledToner) this.dom.ledToner.classList.toggle('is-on', pct <= 20);
   };
 
   Printer.prototype.replaceCartridge = function () {
@@ -376,10 +378,31 @@
       setTimeout(settle, 250);
     }
 
-    var page = { url: url, n: n, el: el };
+    var page = { url: url, n: n, id: 'p' + (++this._ids), el: el };
     this.pages.push(page);
     if (this.ontray) this.ontray();
     return page;
+  };
+
+  /* The desk can put the pages in any order it likes; the pile in the tray,
+     the numbering and everything downstream follow it. */
+  Printer.prototype.reorder = function (order) {
+    var byId = {};
+    this.pages.forEach(function (p) { byId[p.id] = p; });
+
+    var next = [];
+    order.forEach(function (id) { if (byId[id]) { next.push(byId[id]); delete byId[id]; } });
+    this.pages.forEach(function (p) { if (byId[p.id]) next.push(p); });
+
+    this.pages = next;
+    var stack = this.dom.stack;
+    this.pages.forEach(function (page, i) {
+      page.n = i + 1;
+      page.el.setAttribute('aria-label', 'Printed page ' + page.n + ' — open it');
+      stack.appendChild(page.el);
+    });
+    this._fan();
+    if (this.ontray) this.ontray();
   };
 
   Printer.prototype.emptyTray = function () {
@@ -422,7 +445,8 @@
     var total = queue.length;
     var printed = 0;
     this.dom.printer.classList.add('is-busy');
-    this.dom.ledData.classList.add('is-on');
+    this.dom.ledData.classList.add('is-busy');
+    if (this.dom.ledDrum) this.dom.ledDrum.classList.add('is-on');
     if (this.onstate) this.onstate('printing');
     this.say('Printing ' + total + ' sheet' + (total === 1 ? '' : 's') + '…');
     this.sound.resume();
@@ -463,7 +487,8 @@
     this.sound.motor(false);
     this._clearSheet();
     this.dom.printer.classList.remove('is-busy');
-    this.dom.ledData.classList.remove('is-on');
+    this.dom.ledData.classList.remove('is-busy');
+    if (this.dom.ledDrum) this.dom.ledDrum.classList.remove('is-on');
     this.busy = false;
     this.progress(0);
 

@@ -182,37 +182,36 @@
     <div class="stage">
 
       <div class="printer" id="printer">
-        <!-- the fold-up paper support on the top rear -->
-        <div class="printer__support" aria-hidden="true"></div>
-
-        <div class="printer__body">
-          <div class="printer__top" aria-hidden="true">
-            <span class="printer__brand">web-printer</span>
-            <span class="printer__model">HL-2400W</span>
+        <!-- the dark output scoop moulded into the top deck -->
+        <div class="printer__deck">
+          <div class="printer__scoop" aria-hidden="true">
+            <div class="printer__stopper"></div>
           </div>
 
           <div class="printer__panel">
-            <div class="lcd" aria-hidden="true">
-              <div class="lcd__line lcd__line--1" id="lcd-1">READY</div>
-              <div class="lcd__line lcd__line--2" id="lcd-2">no document loaded</div>
-              <div class="lcd__bar"><i id="lcd-fill"></i></div>
+            <div class="lamps" aria-hidden="true">
+              <span class="lamp"><i class="led led--toner" id="led-toner"></i>Toner</span>
+              <span class="lamp"><i class="led led--drum" id="led-drum"></i>Drum</span>
+              <span class="lamp"><i class="led led--error" id="led-error"></i>Error</span>
+              <span class="lamp"><i class="led led--ready is-on" id="led-data"></i>Ready</span>
             </div>
-
-            <div class="keys">
-              <div class="leds" aria-hidden="true">
-                <span class="led led--power is-on" title="Power"></span>
-                <span class="led led--data" id="led-data" title="Data"></span>
-                <span class="led led--error" id="led-error" title="Error"></span>
-              </div>
-              <button class="key key--go" id="key-go" type="button" aria-label="Go">Go</button>
-              <button class="key key--stop" id="key-stop" type="button" aria-label="Stop">Stop</button>
-            </div>
+            <button class="key key--go" id="key-go" type="button">Go</button>
           </div>
+        </div>
 
+        <div class="printer__face">
+          <div class="printer__cover">
+            <span class="printer__brand">web-printer</span>
+            <span class="printer__wifi" aria-hidden="true"></span>
+          </div>
+          <div class="printer__vents" aria-hidden="true"></div>
+          <div class="printer__cassette" aria-hidden="true">
+            <span class="printer__model">HL-2400W</span>
+          </div>
           <div class="printer__slot" aria-hidden="true"></div>
         </div>
 
-        <div class="printer__lip" aria-hidden="true"></div>
+        <div class="printer__feet" aria-hidden="true"></div>
       </div>
 
       <!-- everything below the slot: the output tray, the stack of printed
@@ -235,12 +234,37 @@
         <div class="head" id="head" aria-hidden="true"><i></i></div>
       </div>
 
+      <div class="readout" aria-hidden="true">
+        <div class="lcd">
+          <div class="lcd__line lcd__line--1" id="lcd-1">READY</div>
+          <div class="lcd__line lcd__line--2" id="lcd-2">no document loaded</div>
+          <div class="lcd__bar"><i id="lcd-fill"></i></div>
+        </div>
+      </div>
+
       <div class="stage__bar">
         <p class="status" id="status" role="status" aria-live="polite">Printer idle.</p>
         <p class="stage__tray">
           <span id="tray-count">tray empty</span>
           <button id="btn-pdf" class="linkbtn" type="button" hidden>Save tray as PDF</button>
           <button id="btn-empty" class="linkbtn" type="button" hidden>Empty tray</button>
+        </p>
+      </div>
+    </div>
+
+    <!-- ─────────────────────────  THE DESK  ───────────────────────── -->
+    <div class="desk">
+      <div class="desk__head">
+        <h2>Desk</h2>
+        <div class="desk__actions">
+          <span id="desk-count" class="desk__count">empty</span>
+          <button id="btn-restore" class="linkbtn" type="button" hidden>Back to print order</button>
+        </div>
+      </div>
+      <div class="desk__surface" id="desk">
+        <p class="desk__empty" id="desk-empty">
+          Every printed page is laid out here in full. Drag one to move it —
+          the order on the desk is the order the tray and the PDF use.
         </p>
       </div>
     </div>

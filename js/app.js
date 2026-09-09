@@ -20,7 +20,10 @@
     btnPrint: $('btn-print'), btnCancel: $('btn-cancel'), btnToner: $('btn-toner'),
     printer: $('printer'), head: $('head'), sheet: $('sheet'), out: $('out'),
     stack: $('stack'), stage: document.querySelector('.stage'), status: $('status'),
-    keyGo: $('key-go'), keyStop: $('key-stop'),
+    keyGo: $('key-go'),
+    ledToner: $('led-toner'), ledDrum: $('led-drum'),
+    desk: $('desk'), deskEmpty: $('desk-empty'), deskCount: $('desk-count'),
+    btnRestore: $('btn-restore'),
     lcd: document.querySelector('.lcd'), lcd1: $('lcd-1'), lcd2: $('lcd-2'), lcdFill: $('lcd-fill'),
     ledData: $('led-data'), ledError: $('led-error'),
     tonerFill: $('toner-fill'), tonerPct: $('toner-pct'), tonerBar: document.querySelector('.toner__bar'),
@@ -121,7 +124,8 @@
      the job, or clears a fault; Stop cancels. */
   function pressGo() {
     if (printer.busy) {
-      if (printer.toner <= 0) printer.replaceCartridge();
+      if (printer.toner <= 0) printer.replaceCartridge();   // clear the fault
+      else printer.cancel();                                 // or stop the job
       return;
     }
     if (job && job.pages.length) dom.btnPrint.click();
@@ -254,12 +258,14 @@
     '     then streak, then the job stops until you fit a new',
     '     cartridge -- exactly like the one down the hall.',
     '',
-    '  5. Print a few copies and look at the tray. Every sheet is',
-    '     stepped a little further out than the one under it, so the',
-    '     whole job is visible at once; point at any one and it',
-    '     lifts clear of the pile. Click it to read it full size,',
-    '     save it as PNG, JPEG or WebP, or turn the whole tray',
-    '     into a PDF.',
+    '  5. Print a few copies. The tray fans the sheets so every one',
+    '     is visible, and pointing at any of them lifts it clear of',
+    '     the pile.',
+    '',
+    '  6. Look at the desk underneath. Every page is laid out there',
+    '     in full. Drag one somewhere else -- or focus it and use',
+    '     the arrow keys -- and the tray, the page numbers and the',
+    '     PDF all follow the order you put them in.',
     '',
     '================================================================',
     '',
@@ -316,7 +322,6 @@
 
   dom.btnCancel.addEventListener('click', function () { printer.cancel(); });
   dom.keyGo.addEventListener('click', pressGo);
-  dom.keyStop.addEventListener('click', function () { printer.cancel(); });
   dom.btnToner.addEventListener('click', function () { printer.replaceCartridge(); });
 
   printer.onstate = function (state) {
@@ -324,15 +329,13 @@
     dom.btnPrint.hidden = running;
     dom.btnCancel.hidden = !running;
     dom.btnPrint.disabled = !job || running;
-    dom.keyStop.disabled = !running;
-    dom.keyGo.disabled = running
-      ? state !== 'blocked'
-      : !(job && job.pages.length);
+    dom.keyGo.disabled = !running && !(job && job.pages.length);
   };
 
   /* ── output tray ──────────────────────────────────────────────────────── */
 
   printer.onpage = function (page) {
+    printed.push(page.id);
     page.el.addEventListener('click', function () {
       openViewer(printer.pages.indexOf(page));
     });
@@ -343,9 +346,13 @@
     dom.trayCount.textContent = n ? n + (n === 1 ? ' sheet' : ' sheets') : 'tray empty';
     dom.btnEmpty.hidden = n === 0;
     dom.btnPdf.hidden = n === 0;
+    drawDesk();
   };
 
-  dom.btnEmpty.addEventListener('click', function () { printer.emptyTray(); });
+  dom.btnEmpty.addEventListener('click', function () {
+    printed = [];
+    printer.emptyTray();
+  });
 
   dom.btnPdf.addEventListener('click', async function () {
     if (!printer.pages.length || dom.btnPdf.disabled) return;
@@ -370,6 +377,161 @@
   function stem() {
     var name = (job && job.name) || 'web-printer';
     return name.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '-').slice(0, 60) || 'web-printer';
+  }
+
+  /* ── the desk ─────────────────────────────────────────────────────────── */
+
+  /* Every printed page, laid out in full rather than piled up, in whatever
+     order the desk has been put in. */
+  function drawDesk() {
+    var pages = printer.pages;
+    dom.deskEmpty.hidden = pages.length > 0;
+    dom.deskCount.textContent = pages.length
+      ? pages.length + (pages.length === 1 ? ' page' : ' pages')
+      : 'empty';
+    dom.btnRestore.hidden = !printed.length || !isShuffled();
+
+    var have = {};
+    Array.prototype.forEach.call(dom.desk.querySelectorAll('.card'), function (card) {
+      have[card.dataset.id] = card;
+    });
+
+    pages.forEach(function (page) {
+      var card = have[page.id];
+      if (!card) {
+        card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'card';
+        card.dataset.id = page.id;
+
+        var img = new Image();
+        img.src = page.url;
+        img.alt = '';
+        card.appendChild(img);
+
+        var no = document.createElement('span');
+        no.className = 'card__no';
+        card.appendChild(no);
+
+        card.addEventListener('keydown', onCardKey);
+        card.addEventListener('pointerdown', onCardGrab);
+      }
+      delete have[page.id];
+      card.querySelector('.card__no').textContent = page.n;
+      card.setAttribute('aria-label',
+        'Page ' + page.n + ' of ' + pages.length + '. Arrow keys move it; enter opens it.');
+      dom.desk.appendChild(card);
+    });
+
+    Object.keys(have).forEach(function (id) { have[id].remove(); });
+  }
+
+  /* The order the pages came off the printer, so it can be put back. */
+  var printed = [];
+  function isShuffled() {
+    var now = printer.pages.map(function (p) { return p.id; });
+    return printed.length === now.length && printed.some(function (id, i) { return id !== now[i]; });
+  }
+
+  function commit() {
+    var order = Array.prototype.map.call(dom.desk.querySelectorAll('.card'), function (c) {
+      return c.dataset.id;
+    });
+    printer.reorder(order);
+  }
+
+  dom.btnRestore.addEventListener('click', function () {
+    printer.reorder(printed.slice());
+    printer.say('Pages are back in the order they printed.');
+  });
+
+  /* ── dragging a page around the desk ──────────────────────────────────── */
+
+  var drag = null;
+
+  function onCardGrab(e) {
+    if (e.button != null && e.button !== 0) return;
+    if (printer.pages.length < 2) return;
+
+    var card = e.currentTarget;
+    drag = {
+      card: card,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      pointerId: e.pointerId
+    };
+    try { card.setPointerCapture(e.pointerId); } catch (err) {}
+    card.addEventListener('pointermove', onCardMove);
+    card.addEventListener('pointerup', onCardDrop);
+    card.addEventListener('pointercancel', onCardDrop);
+  }
+
+  function onCardMove(e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.startX;
+    var dy = e.clientY - drag.startY;
+
+    if (!drag.moved) {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;      // still a click
+      drag.moved = true;
+      drag.card.classList.add('is-dragging');
+      dom.desk.classList.add('is-sorting');
+    }
+
+    drag.card.style.transform =
+      'translate(' + dx + 'px, ' + dy + 'px) rotate(-2.5deg) scale(1.06)';
+
+    /* Whichever card the pointer is over is the slot to drop into. */
+    var over = document.elementFromPoint(e.clientX, e.clientY);
+    var target = over && over.closest ? over.closest('.card') : null;
+    if (!target || target === drag.card || target.parentNode !== dom.desk) return;
+
+    var box = target.getBoundingClientRect();
+    var after = (e.clientX - box.left) > box.width / 2;
+    dom.desk.insertBefore(drag.card, after ? target.nextSibling : target);
+  }
+
+  function onCardDrop(e) {
+    if (!drag) return;
+    var card = drag.card;
+    card.removeEventListener('pointermove', onCardMove);
+    card.removeEventListener('pointerup', onCardDrop);
+    card.removeEventListener('pointercancel', onCardDrop);
+    try { card.releasePointerCapture(drag.pointerId); } catch (err) {}
+
+    card.style.transform = '';
+    card.classList.remove('is-dragging');
+    dom.desk.classList.remove('is-sorting');
+
+    if (drag.moved) {
+      commit();
+      var page = printer.pages.filter(function (p) { return p.id === card.dataset.id; })[0];
+      if (page) printer.say('That page is now page ' + page.n + ' of ' + printer.pages.length + '.');
+    } else {
+      var page = printer.pages.filter(function (p) { return p.id === card.dataset.id; })[0];
+      if (page) openViewer(printer.pages.indexOf(page));
+    }
+    drag = null;
+  }
+
+  /* Same job from the keyboard: arrows move the focused page. */
+  function onCardKey(e) {
+    var card = e.currentTarget;
+    var back = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+    var fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+    if (!back && !fwd) return;
+
+    e.preventDefault();
+    if (back && card.previousElementSibling && card.previousElementSibling.classList.contains('card')) {
+      dom.desk.insertBefore(card, card.previousElementSibling);
+    } else if (fwd && card.nextElementSibling) {
+      dom.desk.insertBefore(card.nextElementSibling, card);
+    } else {
+      return;
+    }
+    commit();
+    card.focus();
   }
 
   /* ── page viewer ──────────────────────────────────────────────────────── */

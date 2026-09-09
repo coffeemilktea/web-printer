@@ -49,18 +49,40 @@ The toner cartridge drains in proportion to how much ink each sheet actually
 uses. Below 18% sheets wash out, below 9% they streak, and at zero the job
 pauses until you fit a new cartridge.
 
+## The machine
+
+A compact mono laser in light grey plastic, drawn after the Brother HL-2170W:
+the dark ribbed output scoop moulded into the top deck with its flip-up
+stopper, the Toner / Drum / Error / Ready lamps, the single **Go** key that
+machine has instead of a screen, the big front cover, the wireless lamp, the
+side vents and the paper cassette with its grip notch.
+
+Go does what it does on the real thing — starts the job, cancels one that is
+running, or clears a toner fault. Since the machine has no display, the status
+readout sits beside it rather than on it.
+
+Two deliberate departures: the real HL-2170W puts its output face-down on the
+top deck, where you would be looking at the back of every page, so here the
+paper comes forward into a tray where you can read it; and the bezel carries a
+neutral wordmark rather than Brother's.
+
 ## The tray
 
-The machine is a squat dark laser printer with a paper support folded up at the
-back, a backlit LCD, and Go and Stop keys that actually work — Go starts the
-job or clears a toner fault, Stop cancels it.
+The tray holds the whole job rather than hiding it. Each sheet is stepped a
+little further down than the one beneath it, so every page shows its leading
+edge; the step shrinks as the pile grows, so twenty sheets fan no further than
+three do, and the tray extends to match. Point at any sheet and it rises clear
+of the ones on top of it — mouse or keyboard, since hover and focus share the
+rule.
 
-Its output tray holds the whole job rather than hiding it. Each sheet is
-stepped a little further down the tray than the one beneath it, so every page
-in the stack shows its leading edge; the step shrinks as the pile grows, so
-twenty sheets fan no further than three do and the tray extends to match.
-Point at any sheet and it rises clear of the ones on top of it — mouse or
-keyboard, since hover and focus share the same rule.
+## The desk
+
+Under the machine is a desk, and every printed page is laid out on it in full —
+no piling, no page hidden behind another. Drag one anywhere in the order, or
+focus it and use the arrow keys, and the tray, the page numbering, the viewer
+and the PDF all follow. "Back to print order" undoes the shuffling. Dragging
+and clicking share the same pointer handler, split on a five-pixel threshold:
+move a page and it moves, tap it and it opens.
 
 ## Getting paper back off the screen
 
