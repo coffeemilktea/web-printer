@@ -263,9 +263,12 @@
     '     the pile.',
     '',
     '  6. Look at the desk underneath. Every page is laid out there',
-    '     in full. Drag one somewhere else -- or focus it and use',
-    '     the arrow keys -- and the tray, the page numbers and the',
-    '     PDF all follow the order you put them in.',
+    '     in full. Drop one somewhere else on the desk -- or focus',
+    '     it and use the arrow keys -- and the tray, the page',
+    '     numbers and the PDF all follow the order you put them in.',
+    '',
+    '  7. Drag a page off the desk and out of the window entirely.',
+    '     It lands on your desktop as a PNG.',
     '',
     '================================================================',
     '',
@@ -413,13 +416,20 @@
         no.className = 'card__no';
         card.appendChild(no);
 
+        card.draggable = true;
         card.addEventListener('keydown', onCardKey);
-        card.addEventListener('pointerdown', onCardGrab);
+        card.addEventListener('dragstart', onCardDragStart);
+        card.addEventListener('dragend', onCardDragEnd);
+        card.addEventListener('click', function () {
+          var p = pageOf(card);
+          if (p) openViewer(printer.pages.indexOf(p));
+        });
       }
       delete have[page.id];
       card.querySelector('.card__no').textContent = page.n;
       card.setAttribute('aria-label',
-        'Page ' + page.n + ' of ' + pages.length + '. Arrow keys move it; enter opens it.');
+        'Page ' + page.n + ' of ' + pages.length +
+        '. Drag it to reorder, or out of the window to save it. Arrow keys move it; enter opens it.');
       dom.desk.appendChild(card);
     });
 
@@ -445,75 +455,78 @@
     printer.say('Pages are back in the order they printed.');
   });
 
-  /* ── dragging a page around the desk ──────────────────────────────────── */
+  /* ── dragging a page off the desk ─────────────────────────────────────── */
 
-  var drag = null;
+  /* One gesture, two outcomes: let go over the desk and the page changes
+     places; let go outside the window and the browser saves the file. */
 
-  function onCardGrab(e) {
-    if (e.button != null && e.button !== 0) return;
-    if (printer.pages.length < 2) return;
+  var dragging = null;
+  var dropped = false;
 
+  function onCardDragStart(e) {
     var card = e.currentTarget;
-    drag = {
-      card: card,
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      pointerId: e.pointerId
-    };
-    try { card.setPointerCapture(e.pointerId); } catch (err) {}
-    card.addEventListener('pointermove', onCardMove);
-    card.addEventListener('pointerup', onCardDrop);
-    card.addEventListener('pointercancel', onCardDrop);
+    var page = pageOf(card);
+    if (!page || !e.dataTransfer) return;
+
+    dragging = card;
+    dropped = false;
+    card.classList.add('is-dragging');
+    dom.desk.classList.add('is-sorting');
+
+    var name = stem() + '-page-' + page.n + '.png';
+    e.dataTransfer.effectAllowed = 'copyMove';
+    /* Chromium reads DownloadURL when the drop lands outside the page; the
+       other two are what everything else picks up. */
+    try {
+      e.dataTransfer.setData('DownloadURL', 'image/png:' + name + ':' + page.url);
+    } catch (err) {}
+    e.dataTransfer.setData('text/uri-list', page.url);
+    e.dataTransfer.setData('text/plain', name);
   }
 
-  function onCardMove(e) {
-    if (!drag) return;
-    var dx = e.clientX - drag.startX;
-    var dy = e.clientY - drag.startY;
-
-    if (!drag.moved) {
-      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;      // still a click
-      drag.moved = true;
-      drag.card.classList.add('is-dragging');
-      dom.desk.classList.add('is-sorting');
-    }
-
-    drag.card.style.transform =
-      'translate(' + dx + 'px, ' + dy + 'px) rotate(-2.5deg) scale(1.06)';
-
-    /* Whichever card the pointer is over is the slot to drop into. */
-    var over = document.elementFromPoint(e.clientX, e.clientY);
-    var target = over && over.closest ? over.closest('.card') : null;
-    if (!target || target === drag.card || target.parentNode !== dom.desk) return;
-
-    var box = target.getBoundingClientRect();
-    var after = (e.clientX - box.left) > box.width / 2;
-    dom.desk.insertBefore(drag.card, after ? target.nextSibling : target);
-  }
-
-  function onCardDrop(e) {
-    if (!drag) return;
-    var card = drag.card;
-    card.removeEventListener('pointermove', onCardMove);
-    card.removeEventListener('pointerup', onCardDrop);
-    card.removeEventListener('pointercancel', onCardDrop);
-    try { card.releasePointerCapture(drag.pointerId); } catch (err) {}
-
-    card.style.transform = '';
-    card.classList.remove('is-dragging');
+  function onCardDragEnd() {
+    if (dragging) dragging.classList.remove('is-dragging');
     dom.desk.classList.remove('is-sorting');
-
-    if (drag.moved) {
-      commit();
-      var page = printer.pages.filter(function (p) { return p.id === card.dataset.id; })[0];
-      if (page) printer.say('That page is now page ' + page.n + ' of ' + printer.pages.length + '.');
-    } else {
-      var page = printer.pages.filter(function (p) { return p.id === card.dataset.id; })[0];
-      if (page) openViewer(printer.pages.indexOf(page));
-    }
-    drag = null;
+    dragging = null;
+    /* Dragging over the desk shuffles the cards as you go. If the page was
+       then let go somewhere else — out of the window to save it, or on any
+       other part of the page — that shuffle was never agreed to, so put the
+       desk back the way the pages actually are. */
+    if (!dropped) drawDesk();
   }
+
+  /* While a page is over the desk, slide it into whatever slot it is above. */
+  function onDeskDragOver(e) {
+    if (!dragging) return;                       // a file from outside: leave it alone
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    var over = e.target && e.target.closest ? e.target.closest('.card') : null;
+    if (!over || over === dragging || over.parentNode !== dom.desk) {
+      if (e.target === dom.desk) dom.desk.appendChild(dragging);
+      return;
+    }
+    var box = over.getBoundingClientRect();
+    var after = (e.clientX - box.left) > box.width / 2;
+    dom.desk.insertBefore(dragging, after ? over.nextSibling : over);
+  }
+
+  function onDeskDrop(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();                          // not a file drop; don't spool it
+    dropped = true;
+    commit();
+    var page = pageOf(dragging);
+    if (page) printer.say('That page is now page ' + page.n + ' of ' + printer.pages.length + '.');
+  }
+
+  function pageOf(card) {
+    return printer.pages.filter(function (p) { return p.id === card.dataset.id; })[0];
+  }
+
+  dom.desk.addEventListener('dragover', onDeskDragOver);
+  dom.desk.addEventListener('drop', onDeskDrop);
 
   /* Same job from the keyboard: arrows move the focused page. */
   function onCardKey(e) {

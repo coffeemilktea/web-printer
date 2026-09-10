@@ -740,30 +740,37 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .desk__actions { display: flex; align-items: baseline; gap: 14px; }
 .desk__count { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 
-/* A wooden desktop for the pages to be spread out on. */
+/* A walnut desktop. Two turbulence layers do the work: a fine one stretched
+   along the grain for the pores, and a slack one for the broad figure. */
 .desk__surface {
   position: relative;
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 16px;
-  min-height: 176px;
-  padding: 18px;
-  background:
-    repeating-linear-gradient(96deg, rgba(0,0,0,.05) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 1px, transparent 1px 37px),
-    linear-gradient(160deg, #5b4632 0%, #4a3828 45%, #3c2d20 100%);
-  box-shadow: inset 0 10px 22px -12px rgba(0,0,0,.75);
+  gap: 18px;
+  min-height: 186px;
+  padding: 22px 20px 26px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='320'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.007 0.46' numOctaves='5' seed='11'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.15 0 0 0 0 0.09 0 0 0 0 0.05 0.85 0 0 0 -0.24'/%3E%3C/filter%3E%3Crect width='560' height='320' filter='url(%23g)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='760' height='420'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.085' numOctaves='3' seed='5'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.42 0 0 0 0 0.29 0 0 0 0 0.18 0.5 0 0 0 -0.14'/%3E%3C/filter%3E%3Crect width='760' height='420' filter='url(%23f)'/%3E%3C/svg%3E"),
+    linear-gradient(101deg, rgba(255,235,205,.07) 0%, transparent 34%, transparent 66%, rgba(0,0,0,.16) 100%),
+    linear-gradient(180deg, #6a4a33 0%, #593d2a 38%, #4c3423 72%, #3f2a1c 100%);
+  background-size: 560px 320px, 760px 420px, auto, auto;
+  box-shadow:
+    inset 0 12px 20px -14px rgba(0,0,0,.85),
+    inset 0 1px 0 rgba(255,214,170,.14),
+    inset 0 -14px 22px -16px rgba(0,0,0,.7);
   touch-action: pan-y;
 }
 .desk__empty {
   margin: auto;
-  max-width: 34ch;
+  max-width: 36ch;
   text-align: center;
   font-size: 12.5px;
-  line-height: 1.5;
-  color: #c3ad93;
-  opacity: .75;
+  line-height: 1.55;
+  color: #f0dcc0;
+  opacity: .72;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
 }
 
 .card {
@@ -784,7 +791,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: auto;
   background: #fff;
   border-radius: 1px;
-  box-shadow: 0 6px 14px -5px rgba(0,0,0,.8), 0 0 0 1px rgba(0,0,0,.4);
+  box-shadow: 0 7px 15px -5px rgba(0,0,0,.75), 0 1px 2px rgba(0,0,0,.5), 0 0 0 1px rgba(40,22,10,.5);
 }
 .card:hover { transform: translateY(-5px) rotate(-.6deg); }
 .card:hover img { box-shadow: 0 14px 24px -6px rgba(0,0,0,.85), 0 0 0 1px var(--accent); }
@@ -799,20 +806,18 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   font-family: var(--mono);
   font-size: 10px;
   line-height: 1;
-  color: #d7c2a6;
+  color: #e5cfae;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 
-/* The page being moved, and the gap it will drop into. */
+/* The browser carries its own drag image, so the page left behind just
+   dims to show where it came from. */
 .card.is-dragging {
   cursor: grabbing;
-  z-index: 40;
+  opacity: .3;
   transition: none;
-  transform: rotate(-2.5deg) scale(1.06);
-  pointer-events: none;
 }
-.card.is-dragging img {
-  box-shadow: 0 22px 38px -8px rgba(0,0,0,.9), 0 0 0 2px var(--accent);
-}
+.card.is-dragging img { box-shadow: 0 0 0 2px var(--accent); }
 .desk__surface.is-sorting .card:not(.is-dragging) { transition: transform .18s ease; }
 
 /* ── page viewer ──────────────────────────────────────────────────────── */

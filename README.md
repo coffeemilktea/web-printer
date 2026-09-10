@@ -77,12 +77,23 @@ rule.
 
 ## The desk
 
-Under the machine is a desk, and every printed page is laid out on it in full —
-no piling, no page hidden behind another. Drag one anywhere in the order, or
-focus it and use the arrow keys, and the tray, the page numbering, the viewer
-and the PDF all follow. "Back to print order" undoes the shuffling. Dragging
-and clicking share the same pointer handler, split on a five-pixel threshold:
-move a page and it moves, tap it and it opens.
+Under the machine is a walnut desktop, and every printed page is laid out on it
+in full — no piling, no page hidden behind another. The grain is two SVG
+turbulence layers: a fine one stretched along the grain for the pores, and a
+slack one underneath for the broad figure.
+
+Picking a page up does one of two things, depending on where you let go:
+
+- **Drop it on the desk** and it changes places. The tray, the page numbering,
+  the viewer and the PDF all follow the order you put the pages in, and "Back
+  to print order" undoes the shuffling. Arrow keys do the same job from the
+  keyboard.
+- **Drop it outside the window** — on your desktop, or into another app — and
+  you get the PNG. The drag carries `DownloadURL` for Chromium's
+  drag-out-to-file, plus `text/uri-list` and `text/plain` for everything else.
+
+Dragging over the desk shuffles the cards as you go, so a drag that ends
+anywhere else puts them straight back: that preview was never agreed to.
 
 ## Getting paper back off the screen
 
