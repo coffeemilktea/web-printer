@@ -14,14 +14,14 @@
   --warn:      #f0a53a;
   --err:       #ec6a5e;
 
-  --case:      #ececea;   /* printer body — light warm grey */
-  --case-2:    #dededa;
-  --case-3:    #c6c6c1;
-  --case-4:    #ababa5;
-  --deck:      #454b54;   /* the dark output deck moulded into the top */
-  --deck-2:    #343940;
-  --deck-3:    #24282e;
-  --shell-in:  #0e0f11;   /* slot interior */
+  --case:      #2f3237;   /* printer body — black plastic, lit from above */
+  --case-2:    #212429;
+  --case-3:    #17191c;
+  --case-4:    #0d0e10;
+  --case-lit:  rgba(255,255,255,.17);  /* the specular edge that keeps it visible */
+  --case-ink:  #d3d7dd;   /* legends on a black body */
+  --case-ink-2:#7f858e;
+  --shell-in:  #050506;   /* slot interior */
 
   --sheet-w:   270px;     /* on-screen width of a printed sheet */
   --sheet-h:   349px;     /* its height — app.js updates this per paper size */
@@ -295,8 +295,8 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   align-items: flex-start;
   gap: 12px;
   border-radius: 14px 14px 0 0;
-  background: linear-gradient(180deg, #f2f2f0 0%, var(--case) 40%, var(--case-2) 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95);
+  background: linear-gradient(180deg, #3a3e44 0%, var(--case) 42%, var(--case-2) 100%);
+  box-shadow: inset 0 1px 0 var(--case-lit);
 }
 .printer__scoop {
   position: relative;
@@ -304,12 +304,12 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: 100%;
   border-radius: 7px 7px 0 0;
   background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 12px),
-    linear-gradient(180deg, #1a1e22 0%, #262b31 40%, #343a41 100%);
+    repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 12px),
+    linear-gradient(180deg, #050506 0%, #0c0e10 45%, #16181c 100%);
   box-shadow:
-    inset 0 7px 13px rgba(0,0,0,.85),
-    inset 0 -1px 0 rgba(255,255,255,.08),
-    0 1px 0 rgba(255,255,255,.8);
+    inset 0 7px 14px rgba(0,0,0,.95),
+    inset 0 -1px 0 rgba(255,255,255,.06),
+    0 1px 0 var(--case-lit);
 }
 /* The flip-up stopper on the lip of the scoop. */
 .printer__stopper {
@@ -320,8 +320,8 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: 8px;
   transform: translateX(-50%);
   border-radius: 3px;
-  background: linear-gradient(180deg, #4a5058, #2d3238);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 2px 5px rgba(0,0,0,.6);
+  background: linear-gradient(180deg, #3d4249, #22262a);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 5px rgba(0,0,0,.7);
 }
 
 /* Four labelled lamps and one button, which is all this machine has. */
@@ -339,15 +339,15 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   font-size: 6.5px;
   letter-spacing: .09em;
   text-transform: uppercase;
-  color: #85857f;
+  color: var(--case-ink-2);
   white-space: nowrap;
 }
 .led {
   width: 6px; height: 6px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #bebeb8;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+  background: #14161a;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.05);
 }
 .led--toner.is-on { background: var(--warn); box-shadow: 0 0 6px rgba(240,165,58,.95); }
 .led--drum.is-on  { background: var(--warn); box-shadow: 0 0 6px rgba(240,165,58,.95); }
@@ -359,19 +359,19 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
 .key {
   width: 34px; height: 34px;
   border-radius: 50%;
-  border: 1px solid rgba(0,0,0,.2);
+  border: 1px solid rgba(0,0,0,.55);
   font: inherit;
   font-size: 9px;
   font-weight: 620;
   letter-spacing: .04em;
-  color: #4a4d52;
+  color: var(--case-ink);
   cursor: pointer;
-  background: linear-gradient(180deg, #fbfbfa, #d6d6d1);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 2px 4px rgba(0,0,0,.3);
+  background: linear-gradient(180deg, #454a51, #24272b);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 2px 5px rgba(0,0,0,.6);
   transition: filter .12s, transform .06s;
 }
 .key:hover:not(:disabled) { filter: brightness(1.05); }
-.key:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 2px 5px rgba(0,0,0,.25); }
+.key:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 2px 6px rgba(0,0,0,.7); }
 .key:disabled { opacity: .45; cursor: not-allowed; }
 .key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -386,11 +386,11 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   height: 54px;
   margin-top: 10px;
   border-radius: 7px;
-  background: linear-gradient(180deg, #f7f7f5, #e6e6e2 60%, #d6d6d1);
+  background: linear-gradient(180deg, #343940 0%, #23262b 58%, #191b1e 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,1),
-    inset 0 -1px 0 rgba(0,0,0,.1),
-    0 1px 3px rgba(0,0,0,.18);
+    inset 0 1px 0 var(--case-lit),
+    inset 0 -1px 0 rgba(0,0,0,.6),
+    0 1px 3px rgba(0,0,0,.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -400,14 +400,14 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   position: absolute;
   left: 14px; right: 14px; bottom: 11px;
   height: 1px;
-  background: rgba(0,0,0,.11);
-  box-shadow: 0 1px 0 rgba(255,255,255,.8);
+  background: rgba(0,0,0,.55);
+  box-shadow: 0 1px 0 rgba(255,255,255,.09);
 }
 .printer__brand {
   font-size: 12px;
   font-weight: 640;
   letter-spacing: -.02em;
-  color: #55585e;
+  color: var(--case-ink);
   margin-bottom: 8px;
 }
 .printer__wifi {
@@ -426,15 +426,15 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   width: 9px;
   height: 54px;
   border-radius: 3px;
-  background: repeating-linear-gradient(180deg, rgba(0,0,0,.13) 0 2px, transparent 2px 6px);
+  background: repeating-linear-gradient(180deg, rgba(0,0,0,.75) 0 2px, rgba(255,255,255,.05) 2px 3px, transparent 3px 6px);
 }
 .printer__cassette {
   position: relative;
   margin: 8px -10px 0;
   height: 24px;
   border-radius: 4px 4px 2px 2px;
-  background: linear-gradient(180deg, #eaeae7, #d2d2cd 68%, #bcbcb6);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 2px 4px rgba(0,0,0,.22);
+  background: linear-gradient(180deg, #2c3036, #1d2023 70%, #131517);
+  box-shadow: inset 0 1px 0 var(--case-lit), 0 2px 5px rgba(0,0,0,.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -446,27 +446,27 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   width: 78px; height: 10px;
   transform: translateX(-50%);
   border-radius: 0 0 8px 8px;
-  background: linear-gradient(180deg, #c0c0ba, #a3a39d);
+  background: linear-gradient(180deg, #23262a, #141618);
 }
 .printer__model {
   font-family: var(--mono);
   font-size: 7.5px;
   letter-spacing: .18em;
-  color: #93938d;
+  color: var(--case-ink-2);
 }
 
 /* Where the paper comes out. */
 .printer__slot {
   height: 12px;
   margin: 10px -16px 0;
-  background: linear-gradient(180deg, #7a7a74 0%, var(--shell-in) 42%, #0b0c0d 100%);
-  box-shadow: inset 0 4px 8px rgba(0,0,0,.9);
+  background: linear-gradient(180deg, #3a3e44 0%, var(--shell-in) 42%, #000 100%);
+  box-shadow: inset 0 5px 9px rgba(0,0,0,1), 0 -1px 0 var(--case-lit);
 }
 .printer__feet {
   height: 6px;
   margin: 0 8px;
   border-radius: 0 0 6px 6px;
-  background: linear-gradient(180deg, #93938d, #70706b);
+  background: linear-gradient(180deg, #1a1d20, #0b0c0d);
 }
 
 .printer.is-busy .printer__deck,
@@ -533,7 +533,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   border-radius: 0 0 13px 13px;
   background:
     repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 1px, transparent 1px 13px),
-    linear-gradient(180deg, #23262a 0%, #33373d 16%, #3c4046 70%, #2a2d32 100%);
+    linear-gradient(180deg, #131518 0%, #22252a 16%, #2b2f34 70%, #1a1d20 100%);
   box-shadow:
     inset 0 9px 14px -8px rgba(0,0,0,.9),
     inset 0 -2px 3px rgba(255,255,255,.07),
@@ -545,7 +545,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   bottom: 16px;
   width: 7px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #22252a, #4d525a 45%, #2b2e33);
+  background: linear-gradient(90deg, #131517, #3b4046 45%, #191b1e);
   box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
 }
 .tray__rail--l { left: 5px; }
@@ -562,7 +562,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   z-index: 100;                    /* in front of resting paper, behind a lifted sheet */
   border-radius: 0 0 13px 13px;
   clip-path: polygon(1.6% 0, 98.4% 0, 100% 100%, 0 100%);
-  background: linear-gradient(180deg, #444951, #2b2e33 62%, #1c1e21);
+  background: linear-gradient(180deg, #343940, #1e2124 62%, #101214);
   box-shadow: 0 7px 15px -6px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.13);
   transition: top .25s ease;
 }
