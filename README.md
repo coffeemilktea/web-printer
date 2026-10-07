@@ -166,3 +166,7 @@ one side and still white on the other.
 ## Licence
 
 MIT
+
+## CDN / SRI note
+
+This app is self-contained (no third-party script CDNs in `index.html`). If you later add external scripts or stylesheets, pin exact versions and prefer [Subresource Integrity](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) (`integrity` + `crossorigin`) so a compromised CDN cannot alter the page.

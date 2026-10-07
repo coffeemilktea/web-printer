@@ -234,7 +234,7 @@
         <div class="head" id="head" aria-hidden="true"><i></i></div>
       </div>
 
-      <div class="readout" aria-hidden="true">
+      <div class="readout">
         <div class="lcd">
           <div class="lcd__line lcd__line--1" id="lcd-1">READY</div>
           <div class="lcd__line lcd__line--2" id="lcd-2">no document loaded</div>
@@ -245,7 +245,7 @@
       <div class="stage__bar">
         <p class="status" id="status" role="status" aria-live="polite">Printer idle.</p>
         <p class="stage__tray">
-          <span id="tray-count">tray empty</span>
+          <span id="tray-count" aria-live="polite">tray empty</span>
           <button id="btn-pdf" class="linkbtn" type="button" hidden>Save tray as PDF</button>
           <button id="btn-empty" class="linkbtn" type="button" hidden>Empty tray</button>
         </p>
